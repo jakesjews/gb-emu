@@ -1,0 +1,39 @@
+Original prompt: Implement a browser gameboy emulator that can load and play roms
+
+## 2026-02-23
+- Created Vite + TypeScript project skeleton in an empty repository.
+- Added planned folder structure for emulator core, runtime, UI, and tests.
+- Next: implement CPU/MMU/timer/interrupt/cartridge core with ROM+MBC1 support.
+- Implemented core emulator modules: CPU (full opcode matrix + CB ops), MMU/bus, timer, interrupts, serial stub, joypad, PPU, cartridge parser, ROM-only and MBC1 mappers.
+- Implemented browser runtime/UI: canvas renderer, controls, debug pane, keyboard + gamepad input, deterministic `window.advanceTime(ms)`, and `window.render_game_to_text()` state export.
+- Added save manager with automatic localStorage persistence by SHA-1 ROM hash.
+- Added unit tests (CPU, timer, MBC1), compatibility test harness (blargg subset), Playwright smoke test, and ROM fetch script.
+- Validation pass: `npm run build`, `npm run test:unit`, `npm run test:compat` (ROM-dependent tests skipped without assets), and `npm run test:e2e` all completed successfully.
+- Next TODO: run compatibility tests against downloaded blargg ROMs and tune timing/PPU edge cases based on failures.
+- Ran the develop-web-game Playwright client against `http://127.0.0.1:5173`, inspected generated screenshots/state output, and fixed no-ROM stepping behavior so deterministic hooks no longer advance CPU state before a ROM is loaded.
+- Added ignore rules for Playwright and web-game test artifacts.
+- Ran `./scripts/fetch_test_roms.sh` and executed blargg subset.
+- Fixed critical CPU bug in `JR` (`0x18`) where PC-relative offset was computed from pre-immediate PC due expression evaluation order.
+- Upgraded compatibility harness:
+  - per-ROM cycle budgets for long-running tests (e.g., `cpu_instrs`),
+  - dedicated `halt_bug` completion check using framebuffer hash + stable loop verification.
+- Implemented targeted timer-cycle alignment for memory-access-sensitive opcodes by introducing controlled early timer ticking inside CPU execution and compensating timer ticks in system stepping.
+- Verified mem access timings against individual blargg ROMs: `01-read_timing`, `02-write_timing`, `03-modify_timing` now pass.
+- Current validation status:
+  - `npm run build` passes,
+  - `npm run test:unit` passes,
+  - `npm run test:compat` passes (`cpu_instrs`, `instr_timing`, `mem_timing`, `halt_bug`),
+  - `npm run test:e2e` passes.
+- Investigated keyboard-unresponsive Tetris title/menu flow with browser + core traces.
+- Root cause found in serial stub semantics: transfers were auto-completing for `SC=0x80` (external clock) and RX data echoed TX byte, which breaks Tetris menu/link detection logic.
+- Fixed `Serial` behavior:
+  - auto-complete only when `SC` has start+internal clock (`0x81`),
+  - on completion in disconnected-link mode, RX byte now becomes `0xFF`,
+  - preserve transmitted byte in serial output log for blargg diagnostics.
+- Added `tests/unit/serial.test.ts` covering internal-clock completion + interrupt and external-clock non-completion.
+- Revalidated:
+  - `npm run test:unit` passes,
+  - `npm run test:compat` passes,
+  - `npm run build` passes.
+- Manual browser verification with `tests/roms/tetris.gb`:
+  - keyboard `Enter` now advances from title `1 PLAYER / 2 PLAYER` to subsequent menus (`GAME TYPE / MUSIC TYPE`, then `B-TYPE` level screen).
