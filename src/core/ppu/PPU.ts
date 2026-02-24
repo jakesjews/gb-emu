@@ -215,6 +215,10 @@ export class PPU {
   }
 
   public canAccessVRAM(): boolean {
+    return this.canReadVRAM();
+  }
+
+  public canReadVRAM(): boolean {
     if (!this.isLcdEnabled()) {
       return true;
     }
@@ -226,7 +230,19 @@ export class PPU {
     return this.getMode() !== MODE_TRANSFER;
   }
 
+  public canWriteVRAM(): boolean {
+    if (!this.isLcdEnabled()) {
+      return true;
+    }
+
+    return this.getMode() !== MODE_TRANSFER;
+  }
+
   public canAccessOAM(): boolean {
+    return this.canReadOAM();
+  }
+
+  public canReadOAM(): boolean {
     if (!this.isLcdEnabled()) {
       return true;
     }
@@ -236,6 +252,23 @@ export class PPU {
     }
 
     const mode = this.getMode();
+    return mode === MODE_HBLANK || mode === MODE_VBLANK;
+  }
+
+  public canWriteOAM(): boolean {
+    if (!this.isLcdEnabled()) {
+      return true;
+    }
+
+    if (this.oamStartDelayCycles > 0) {
+      return true;
+    }
+
+    const mode = this.getMode();
+    if (mode === MODE_OAM && this.modeClock >= this.oamDurationCycles - 1) {
+      return true;
+    }
+
     return mode === MODE_HBLANK || mode === MODE_VBLANK;
   }
 

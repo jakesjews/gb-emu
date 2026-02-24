@@ -112,7 +112,7 @@ export class Bus {
   public read8(address: number): number {
     const addr = address & 0xffff;
 
-    if (this.isCpuDmaBlockedAddress(addr)) {
+    if (this.isCpuDmaBlockedAddress(addr) && addr !== 0xff46) {
       return 0xff;
     }
 
@@ -121,7 +121,7 @@ export class Bus {
     }
 
     if (addr <= 0x9fff) {
-      if (!this.ppu.canAccessVRAM()) {
+      if (!this.ppu.canReadVRAM()) {
         return 0xff;
       }
       return this.ppu.readVRAM(addr - 0x8000);
@@ -140,7 +140,7 @@ export class Bus {
     }
 
     if (addr <= 0xfe9f) {
-      if (this.dmaActive || !this.ppu.canAccessOAM()) {
+      if (this.dmaActive || !this.ppu.canReadOAM()) {
         return 0xff;
       }
       return this.ppu.readOAM(addr - 0xfe00);
@@ -215,7 +215,7 @@ export class Bus {
     }
 
     if (addr <= 0x9fff) {
-      if (!this.ppu.canAccessVRAM()) {
+      if (!this.ppu.canWriteVRAM()) {
         return;
       }
       this.ppu.writeVRAM(addr - 0x8000, masked);
@@ -238,7 +238,7 @@ export class Bus {
     }
 
     if (addr <= 0xfe9f) {
-      if (this.dmaActive || !this.ppu.canAccessOAM()) {
+      if (this.dmaActive || !this.ppu.canWriteOAM()) {
         return;
       }
       this.ppu.writeOAM(addr - 0xfe00, masked);

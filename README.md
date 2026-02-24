@@ -36,16 +36,19 @@ npm run dev
 ```bash
 npm run format:check
 npm run test:unit
-npm run test:compat   # blargg + mooneye tier-1, skips missing ROM assets
+npm run test:compat:tier1
+npm run test:compat:tier2
+npm run test:compat   # tier1 + tier2 composite gate
 npm run test:e2e
 ```
 
 CI (GitHub Actions) runs:
 
+- `./scripts/fetch_test_roms.sh` (pinned blargg/mooneye OSS assets)
 - `npm run build`
 - `npm run format:check`
-- `npm run test` (unit + compat; ROM-backed compat cases skip when assets are absent)
-- `npm run test:e2e` (includes deterministic smoke + optional local Tetris smoke that skips without `tests/roms/tetris.gb`)
+- `npm run test` (unit + compat; includes tier1 + tier2 mooneye matrix)
+- `npm run test:e2e` (deterministic smoke + optional local Tetris smoke that skips without `tests/roms/tetris.gb`)
 
 Auto-format locally:
 

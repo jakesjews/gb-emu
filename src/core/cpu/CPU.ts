@@ -34,7 +34,7 @@ export class CPU {
 
   public lastOpcode = 0;
 
-  private pendingEnableIme = false;
+  private imeEnableDelay = 0;
 
   private haltBug = false;
 
@@ -68,7 +68,7 @@ export class CPU {
     this.halted = false;
     this.cycles = 0;
     this.lastOpcode = 0;
-    this.pendingEnableIme = false;
+    this.imeEnableDelay = 0;
     this.haltBug = false;
   }
 
@@ -76,9 +76,11 @@ export class CPU {
     this.timerEarlyTickCycles = 0;
     this.nonTimerEarlyTickCycles = 0;
 
-    if (this.pendingEnableIme) {
-      this.ime = true;
-      this.pendingEnableIme = false;
+    if (this.imeEnableDelay > 0) {
+      this.imeEnableDelay -= 1;
+      if (this.imeEnableDelay === 0) {
+        this.ime = true;
+      }
     }
 
     const pendingMask = this.interrupts.getPendingMask();
@@ -108,7 +110,7 @@ export class CPU {
 
   private serviceInterrupt(): number {
     this.ime = false;
-    this.pendingEnableIme = false;
+    this.imeEnableDelay = 0;
 
     const pc = this.registers.pc;
     const hi = (pc >> 8) & 0xff;
@@ -596,6 +598,7 @@ export class CPU {
       case 0xd9:
         this.registers.pc = this.pop16();
         this.ime = true;
+        this.imeEnableDelay = 0;
         return 16;
       case 0xda:
         return this.jpCondition(this.registers.getFlag(FLAG_C));
@@ -681,7 +684,7 @@ export class CPU {
         return 8;
       case 0xf3:
         this.ime = false;
-        this.pendingEnableIme = false;
+        this.imeEnableDelay = 0;
         return 4;
       case 0xf4:
         return 4;
@@ -709,7 +712,11 @@ export class CPU {
         }
         return 16;
       case 0xfb:
-        this.pendingEnableIme = true;
+        // EI enables IME after the subsequent instruction has completed.
+        // While an enable is already pending, additional EI opcodes do not restart the delay.
+        if (!this.ime && this.imeEnableDelay === 0) {
+          this.imeEnableDelay = 2;
+        }
         return 4;
       case 0xfc:
       case 0xfd:

@@ -14,6 +14,8 @@ export class Timer {
 
   private timaReloadDelay = 0;
 
+  private timaReloadApplied = false;
+
   private readonly interrupts: InterruptController;
 
   public constructor(interrupts: InterruptController) {
@@ -26,9 +28,14 @@ export class Timer {
     this.tma = 0;
     this.tac = 0;
     this.timaReloadDelay = 0;
+    this.timaReloadApplied = false;
   }
 
   public tick(cycles: number): void {
+    if (cycles > 0 && this.timaReloadApplied) {
+      this.timaReloadApplied = false;
+    }
+
     for (let i = 0; i < cycles; i += 1) {
       const oldSignal = this.getTimerSignal();
       this.divCounter = (this.divCounter + 1) & 0xffff;
@@ -59,11 +66,19 @@ export class Timer {
   }
 
   public writeTIMA(value: number): void {
+    const masked = value & 0xff;
+
+    // Writes during the reload cycle are ignored: TIMA keeps the reloaded TMA value.
+    if (this.timaReloadApplied) {
+      return;
+    }
+
+    // Writes during the pending reload window cancel the delayed reload.
     if (this.timaReloadDelay > 0) {
       this.timaReloadDelay = 0;
     }
 
-    this.tima = value & 0xff;
+    this.tima = masked;
   }
 
   public readTMA(): number {
@@ -72,6 +87,11 @@ export class Timer {
 
   public writeTMA(value: number): void {
     this.tma = value & 0xff;
+
+    // If reload is occurring this cycle, TIMA receives the just-written TMA.
+    if (this.timaReloadApplied) {
+      this.tima = this.tma;
+    }
   }
 
   public readTAC(): number {
@@ -101,9 +121,14 @@ export class Timer {
   }
 
   private incrementTimaOnFallingEdge(): void {
+    if (this.timaReloadDelay > 0) {
+      return;
+    }
+
     if (this.tima === 0xff) {
       this.tima = 0x00;
       this.timaReloadDelay = TIMA_RELOAD_DELAY_CYCLES;
+      this.timaReloadApplied = false;
       return;
     }
 
@@ -121,6 +146,7 @@ export class Timer {
     }
 
     this.tima = this.tma;
+    this.timaReloadApplied = true;
     this.interrupts.request(InterruptFlag.Timer);
   }
 }

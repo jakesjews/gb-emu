@@ -83,3 +83,29 @@ Original prompt: Implement a browser gameboy emulator that can load and play rom
   - `npm run -s build` passes,
   - `npm run -s test` passes,
   - `npm run -s test:e2e` passes.
+- Expanded mooneye compatibility harness for tiered gating:
+  - added `npm run test:compat:tier1`,
+  - added `npm run test:compat:tier2`,
+  - updated `npm run test:compat` to run tier1 + tier2 composite gate.
+- Tier-2 baseline before edge-case fixes (recorded from first full run) failed:
+  - `acceptance/ei_sequence.gb`
+  - `acceptance/rapid_di_ei.gb`
+  - `acceptance/timer/tima_write_reloading.gb`
+  - `acceptance/timer/tma_write_reloading.gb`
+  - `acceptance/oam_dma/reg_read.gb`
+  - `acceptance/ppu/lcdon_write_timing-GS.gb`
+- Implemented compatibility fixes across CPU/timer/PPU/bus:
+  - corrected EI/DI delay/cancel behavior and added repeated-EI handling,
+  - fixed TIMA/TMA reload-window write semantics,
+  - fixed DMA bus blocking exception for `FF46` register reads during active DMA,
+  - split PPU OAM/VRAM read vs write gating to satisfy LCD-on write timing edges.
+- Added/expanded unit coverage for new edge cases:
+  - `tests/unit/cpu.test.ts` (EI/DI sequencing),
+  - `tests/unit/timer.test.ts` (reload-window writes).
+- Updated CI hard gate:
+  - `build_and_compat` now runs `./scripts/fetch_test_roms.sh` before tests,
+  - compat tests now execute against fetched OSS assets in GitHub Actions instead of being skipped.
+- Tier-2 final verification status:
+  - `npm run -s test:compat:tier1` passes,
+  - `npm run -s test:compat:tier2` passes (20/20 required mooneye ROMs),
+  - `npm run -s test:compat` passes (tier1 + tier2 composite).

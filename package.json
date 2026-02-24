@@ -11,7 +11,9 @@
     "preview": "vite preview",
     "test": "npm run test:unit && npm run test:compat",
     "test:unit": "vitest run tests/unit",
-    "test:compat": "vitest run tests/compat",
+    "test:compat": "npm run test:compat:tier1 && npm run test:compat:tier2",
+    "test:compat:tier1": "vitest run tests/compat/blargg.compat.test.ts tests/compat/mooneye.compat.test.ts --testNamePattern \"blargg compatibility subset|mooneye DMG tier-1 compatibility\"",
+    "test:compat:tier2": "vitest run tests/compat/mooneye.compat.test.ts --testNamePattern \"mooneye DMG tier-2 compatibility\"",
     "test:e2e": "playwright test"
   },
   "devDependencies": {
