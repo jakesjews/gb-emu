@@ -77,6 +77,26 @@ body {
   gap: 0.45rem;
 }
 
+.audio-row {
+  margin-top: 0.7rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.volume-wrap {
+  display: grid;
+  gap: 0.25rem;
+  font-family: 'Azeret Mono', 'Menlo', monospace;
+  font-size: 0.78rem;
+}
+
+.volume-slider {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
 .action-btn {
   border: 2px solid var(--border);
   border-radius: 10px;

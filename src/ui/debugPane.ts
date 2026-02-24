@@ -4,6 +4,12 @@ function hex(value: number, width: number): string {
   return `0x${(value >>> 0).toString(16).toUpperCase().padStart(width, '0')}`;
 }
 
+interface DebugAudioState {
+  masterEnabled: boolean;
+  bufferedFrames: number;
+  underruns: number;
+}
+
 export class DebugPane {
   private readonly root: HTMLElement;
 
@@ -23,12 +29,13 @@ export class DebugPane {
     parent.append(this.root);
   }
 
-  public update(snapshot: DebugSnapshot, serialOutput: string): void {
+  public update(snapshot: DebugSnapshot, serialOutput: string, audio: DebugAudioState): void {
     const lines = [
       `PC ${hex(snapshot.pc, 4)}  SP ${hex(snapshot.sp, 4)}  OP ${hex(snapshot.opcode, 2)}`,
       `AF ${hex(snapshot.af, 4)}  BC ${hex(snapshot.bc, 4)}  DE ${hex(snapshot.de, 4)}  HL ${hex(snapshot.hl, 4)}`,
       `IME ${snapshot.ime ? '1' : '0'}  HALT ${snapshot.halted ? '1' : '0'}  IE ${hex(snapshot.ie, 2)}  IF ${hex(snapshot.if, 2)}`,
       `LY ${hex(snapshot.ly, 2)}  LCDC ${hex(snapshot.lcdc, 2)}  STAT ${hex(snapshot.stat, 2)}  CYC ${snapshot.cycles}`,
+      `APU ${audio.masterEnabled ? 'ON' : 'OFF'}  BUF ${audio.bufferedFrames}  UDR ${audio.underruns}`,
       `SERIAL ${JSON.stringify(serialOutput.slice(-80))}`,
     ];
 

@@ -10,6 +10,7 @@ From-scratch browser Game Boy emulator targeting original DMG behavior.
 - Keyboard + gamepad input
 - Auto save persistence in `localStorage` keyed by ROM SHA-1 (SRAM + mapper metadata)
 - Canvas renderer (160x144 internal resolution, pixel scaling)
+- DMG APU v1 audio (CH1/CH2/CH3/CH4, stereo routing via NR50/NR51/NR52)
 - Basic debug pane (registers, flags, interrupt state, serial tail)
 - Deterministic browser hooks:
   - `window.render_game_to_text()`
@@ -23,6 +24,8 @@ From-scratch browser Game Boy emulator targeting original DMG behavior.
 - Start: `Enter`
 - Select: `Shift`
 - Fullscreen toggle: `F`
+- Audio mute toggle: UI button
+- Audio volume: UI slider (0..1)
 
 ## Development
 
@@ -46,6 +49,7 @@ npm run test:compat        # strict gate (blargg + tier1 + tier2 + tier3a + tier
 npm run test:compat:soft   # local convenience mode (allows missing ROM assets)
 npm run test:compat:extended # strict required set + optional mapper RTC diagnostics
 npm run test:compat:report # writes test-results/compat/summary.md
+npm run test:audio:smoke   # deterministic APU/pipeline unit smoke
 npm run test:e2e
 ```
 
@@ -92,4 +96,4 @@ Tier-3B and mapper-required suites are promoted into strict gating (experimental
 
 - This project does not distribute commercial ROMs.
 - Bring your own legally obtained ROM files.
-- Audio generation is intentionally stubbed in v1.
+- Audio is gameplay-accurate DMG v1 (not cycle-perfect for every hardware edge quirk).

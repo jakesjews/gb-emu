@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { APUStub } from '../../src/core/apu/APUStub';
+import { APU } from '../../src/core/apu/APU';
 import { Cartridge } from '../../src/core/cartridge/Cartridge';
 import { Joypad } from '../../src/core/input/Joypad';
 import { InterruptController } from '../../src/core/interrupts/InterruptController';
@@ -25,7 +25,7 @@ function createBus(romFill = 0x11): { bus: Bus; mmu: MMU } {
   const timer = new Timer(interrupts);
   const joypad = new Joypad(interrupts);
   const serial = new Serial(interrupts);
-  const apu = new APUStub();
+  const apu = new APU();
   const bus = new Bus(mmu, ppu, timer, interrupts, joypad, serial, apu);
 
   const rom = buildRom(romFill);

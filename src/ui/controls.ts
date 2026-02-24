@@ -4,6 +4,8 @@ interface ControlsHandlers {
   onReset: () => void;
   onStepInstruction: () => void;
   onStepFrame: () => void;
+  onToggleMute: () => void;
+  onSetVolume: (volume: number) => void;
 }
 
 export class Controls {
@@ -26,6 +28,10 @@ export class Controls {
   private readonly romLine: HTMLElement;
 
   private readonly errorLine: HTMLElement;
+
+  private readonly muteButton: HTMLButtonElement;
+
+  private readonly volumeSlider: HTMLInputElement;
 
   public constructor(parent: HTMLElement, handlers: ControlsHandlers) {
     this.root = document.createElement('section');
@@ -63,6 +69,27 @@ export class Controls {
       this.stepFrameButton,
     );
 
+    const audioRow = document.createElement('div');
+    audioRow.className = 'audio-row';
+
+    this.muteButton = this.makeButton('Mute Off', handlers.onToggleMute);
+    this.muteButton.classList.add('mute-btn');
+
+    const volumeWrap = document.createElement('label');
+    volumeWrap.className = 'volume-wrap';
+    volumeWrap.textContent = 'Volume';
+
+    this.volumeSlider = document.createElement('input');
+    this.volumeSlider.type = 'range';
+    this.volumeSlider.min = '0';
+    this.volumeSlider.max = '1';
+    this.volumeSlider.step = '0.01';
+    this.volumeSlider.value = '0.8';
+    this.volumeSlider.className = 'volume-slider';
+
+    volumeWrap.append(this.volumeSlider);
+    audioRow.append(this.muteButton, volumeWrap);
+
     const status = document.createElement('div');
     status.className = 'status-grid';
     this.statusLine = document.createElement('span');
@@ -83,7 +110,7 @@ export class Controls {
     help.textContent =
       'Keyboard: arrows = D-pad, X = A, Z = B, Enter = Start, Shift = Select, F = fullscreen.';
 
-    this.root.append(title, subtitle, uploadRow, buttons, status, help);
+    this.root.append(title, subtitle, uploadRow, buttons, audioRow, status, help);
     parent.append(this.root);
 
     this.fileInput.addEventListener('change', async () => {
@@ -93,6 +120,15 @@ export class Controls {
       }
 
       await handlers.onSelectRom(file);
+    });
+
+    this.volumeSlider.addEventListener('input', () => {
+      const volume = Number.parseFloat(this.volumeSlider.value);
+      if (!Number.isFinite(volume)) {
+        return;
+      }
+
+      handlers.onSetVolume(volume);
     });
   }
 
@@ -116,6 +152,14 @@ export class Controls {
 
   public setError(message: string): void {
     this.errorLine.textContent = message;
+  }
+
+  public setMuted(muted: boolean): void {
+    this.muteButton.textContent = muted ? 'Mute On' : 'Mute Off';
+  }
+
+  public setVolume(volume: number): void {
+    this.volumeSlider.value = `${Math.max(0, Math.min(1, volume))}`;
   }
 
   private makeButton(label: string, onClick: () => void): HTMLButtonElement {

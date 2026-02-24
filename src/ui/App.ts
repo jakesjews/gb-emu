@@ -1,4 +1,5 @@
 import { GameBoy } from '../core/system/GameBoy';
+import { AudioOutput } from '../runtime/audio/AudioOutput';
 import { EmulatorLoop } from '../runtime/EmulatorLoop';
 import { GamepadManager } from '../runtime/GamepadManager';
 import { SaveManager } from '../runtime/SaveManager';
@@ -61,9 +62,15 @@ export class App {
 
   private readonly loop: EmulatorLoop;
 
+  private readonly audioOutput: AudioOutput;
+
   private romHash: string | null = null;
 
   private saveDebounceId: number | null = null;
+
+  private muted = false;
+
+  private volume = 0.8;
 
   private readonly status: EmulatorStatus = {
     running: false,
@@ -91,9 +98,13 @@ export class App {
       onReset: () => this.reset(),
       onStepInstruction: () => this.stepInstruction(),
       onStepFrame: () => this.stepFrame(),
+      onToggleMute: () => this.toggleMute(),
+      onSetVolume: (volume) => this.setVolume(volume),
     });
 
     this.controls.setRunning(false);
+    this.controls.setMuted(this.muted);
+    this.controls.setVolume(this.volume);
 
     this.gamepadManager = new GamepadManager((button, pressed) => {
       this.gameBoy.setButtonState(button, pressed);
@@ -109,8 +120,13 @@ export class App {
       },
     );
 
+    this.audioOutput = new AudioOutput(this.gameBoy);
+    this.audioOutput.setVolume(this.volume);
+    this.audioOutput.setMuted(this.muted);
+
     this.gameBoy.onFrameFinished((frame) => {
       this.canvasView.draw(frame);
+      this.audioOutput.pump();
       this.updateDebugPane();
       this.persistSaveIfDirty();
     });
@@ -155,16 +171,19 @@ export class App {
     window.addEventListener('pagehide', () => {
       this.flushSave();
       this.gameBoy.releaseAllButtons();
+      void this.audioOutput.close();
     });
 
     window.addEventListener('beforeunload', () => {
       this.flushSave();
+      void this.audioOutput.close();
     });
   }
 
   private installBrowserHooks(): void {
     window.render_game_to_text = () => {
       const snapshot = this.gameBoy.getDebugSnapshot();
+      const audio = this.audioOutput.getStats();
       const payload = {
         coordinate_system:
           'Screen origin is top-left at (0,0), +x right, +y down, resolution 160x144.',
@@ -195,6 +214,12 @@ export class App {
         },
         frame_hash: hashFrame(this.gameBoy.getFrameBuffer()),
         compat_flags: this.gameBoy.getCompatFlags(),
+        audio: {
+          enabled: audio.enabled,
+          context_state: audio.contextState,
+          buffered_frames: audio.bufferedFrames,
+          underruns: audio.underruns,
+        },
         joypad: this.gameBoy.getJoypadDebug(),
         serial_tail: this.gameBoy.getSerialOutput().slice(-120),
       };
@@ -237,6 +262,8 @@ export class App {
       this.loop.reset();
       this.status.running = false;
       this.controls.setRunning(false);
+      this.audioOutput.setPaused(true);
+      void this.audioOutput.resumeFromUserGesture();
       this.canvasView.draw(this.gameBoy.getFrameBuffer());
       this.updateDebugPane();
     } catch (error) {
@@ -256,6 +283,13 @@ export class App {
     this.loop.toggle();
     this.status.running = this.loop.isRunning();
     this.controls.setRunning(this.status.running);
+
+    if (this.status.running) {
+      this.audioOutput.setPaused(false);
+      void this.audioOutput.resumeFromUserGesture();
+    } else {
+      this.audioOutput.setPaused(true);
+    }
   }
 
   private reset(): void {
@@ -280,6 +314,7 @@ export class App {
 
     this.status.running = false;
     this.controls.setRunning(false);
+    this.audioOutput.setPaused(true);
     this.canvasView.draw(this.gameBoy.getFrameBuffer());
     this.updateDebugPane();
   }
@@ -291,6 +326,7 @@ export class App {
 
     this.loop.pause();
     this.controls.setRunning(false);
+    this.audioOutput.setPaused(true);
     this.loop.stepInstruction();
     this.updateDebugPane();
   }
@@ -302,13 +338,32 @@ export class App {
 
     this.loop.pause();
     this.controls.setRunning(false);
+    this.audioOutput.setPaused(true);
     this.loop.stepFrame();
     this.updateDebugPane();
   }
 
   private updateDebugPane(): void {
     const snapshot = this.gameBoy.getDebugSnapshot();
-    this.debugPane.update(snapshot, this.gameBoy.getSerialOutput());
+    const apuState = this.gameBoy.getAudioDebug();
+    const audioStats = this.audioOutput.getStats();
+    this.debugPane.update(snapshot, this.gameBoy.getSerialOutput(), {
+      masterEnabled: apuState.masterEnabled,
+      bufferedFrames: audioStats.bufferedFrames,
+      underruns: audioStats.underruns,
+    });
+  }
+
+  private toggleMute(): void {
+    this.muted = !this.muted;
+    this.audioOutput.setMuted(this.muted);
+    this.controls.setMuted(this.muted);
+  }
+
+  private setVolume(volume: number): void {
+    this.volume = Math.max(0, Math.min(1, volume));
+    this.audioOutput.setVolume(this.volume);
+    this.controls.setVolume(this.volume);
   }
 
   private persistSaveIfDirty(): void {

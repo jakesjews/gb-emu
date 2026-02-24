@@ -256,3 +256,32 @@ Original prompt: Implement a browser gameboy emulator that can load and play rom
   - optional `mbctest.gb` remains best-effort and non-fatal.
 - Promotion policy language updated in docs:
   - replaced streak-based wording with immediate promoted-on-green experimental policy.
+- DMG APU bring-up milestone completed (all 4 channels + deterministic test gate):
+  - added real APU core at `src/core/apu/APU.ts` and wired it into `Bus`/`GameBoy` (replacing `APUStub` in active emulation path),
+  - implemented frame sequencer (512Hz), channel timing/envelope/length/sweep behavior, mixer routing via `NR50/NR51/NR52`, and internal 48kHz stereo sample FIFO,
+  - added `GameBoy` audio accessors for runtime integration: sample drain, sample rate, and lightweight audio debug state.
+- Browser audio pipeline landed:
+  - added `src/runtime/audio/AudioOutput.ts` with `AudioWorklet` primary path and `ScriptProcessorNode` fallback,
+  - added `src/runtime/audio/gbAudioProcessor.js` worklet processor,
+  - added deterministic pipeline buffer helper `src/runtime/audio/SampleBuffer.ts`.
+- UI/debug integration landed:
+  - `App.ts` now wires audio output lifecycle to user gesture/run state,
+  - added mute toggle + volume slider controls in `controls.ts`/`styles.css`,
+  - debug pane now displays APU master state, buffered audio frames, and underrun count,
+  - `window.render_game_to_text()` payload now includes `audio.enabled`, `audio.context_state`, `audio.buffered_frames`, and `audio.underruns`.
+- Deterministic audio tests added:
+  - `tests/unit/apu.test.ts` (sequencer timing, NR52 reset semantics, sweep overflow disable, wave output, noise width mode, mixer routing),
+  - `tests/unit/audioPipeline.test.ts` (deterministic scripted output, FIFO accounting, underrun accounting),
+  - added convenience script `npm run test:audio:smoke`.
+- Validation status after APU milestone:
+  - `npm run -s format:check` ✅
+  - `npm run -s build` ✅
+  - `npm run -s test:unit` ✅
+  - `npm run -s test:compat` ✅
+  - `npm run -s test:e2e` ✅
+- Documentation updated:
+  - `README.md` now documents DMG APU v1 support, mute/volume controls, `test:audio:smoke`, and current audio limitation (gameplay-accurate, not cycle-perfect).
+- Post-merge web-game sanity loop:
+  - ran develop-web-game Playwright client against `http://127.0.0.1:5173`,
+  - inspected generated `output/web-game/shot-1.png` and `state-1.json`,
+  - verified deterministic hooks include new audio payload block and no runtime console/page errors surfaced.

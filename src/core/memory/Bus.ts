@@ -1,4 +1,4 @@
-import { APUStub } from '../apu/APUStub';
+import { APU } from '../apu/APU';
 import { Cartridge } from '../cartridge/Cartridge';
 import { Joypad } from '../input/Joypad';
 import { InterruptController } from '../interrupts/InterruptController';
@@ -24,7 +24,7 @@ export class Bus {
 
   private readonly serial: Serial;
 
-  private readonly apu: APUStub;
+  private readonly apu: APU;
 
   private dmaActive = false;
 
@@ -45,7 +45,7 @@ export class Bus {
     interrupts: InterruptController,
     joypad: Joypad,
     serial: Serial,
-    apu: APUStub,
+    apu: APU,
   ) {
     this.mmu = mmu;
     this.ppu = ppu;

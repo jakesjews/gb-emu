@@ -22,6 +22,7 @@
     "test:compat:mapper:strict": "GB_MAPPER_COMPAT_MODE=strict vitest run tests/compat/mapper.compat.test.ts",
     "test:compat:extended": "npm run test:compat && npm run test:compat:mapper:shadow",
     "test:compat:report": "node scripts/compat_report.mjs",
+    "test:audio:smoke": "vitest run tests/unit/apu.test.ts tests/unit/audioPipeline.test.ts",
     "test:e2e": "playwright test"
   },
   "devDependencies": {

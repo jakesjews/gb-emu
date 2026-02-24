@@ -1,5 +1,5 @@
 import type { Button, CartridgeInfo, DebugSnapshot } from '../../types/emulator';
-import { APUStub } from '../apu/APUStub';
+import { APU } from '../apu/APU';
 import { Cartridge } from '../cartridge/Cartridge';
 import { CPU } from '../cpu/CPU';
 import { Joypad } from '../input/Joypad';
@@ -25,7 +25,7 @@ export class GameBoy {
 
   private readonly serial = new Serial(this.interrupts);
 
-  private readonly apu = new APUStub();
+  private readonly apu = new APU();
 
   private readonly bus = new Bus(
     this.mmu,
@@ -217,6 +217,24 @@ export class GameBoy {
 
   public clearSerialOutput(): void {
     this.serial.clearOutput();
+  }
+
+  public drainAudioSamples(maxFrames = 2048): Float32Array {
+    return this.apu.drainSamples(maxFrames);
+  }
+
+  public getAudioSampleRate(): number {
+    return this.apu.getSampleRate();
+  }
+
+  public getAudioDebug(): {
+    masterEnabled: boolean;
+    bufferedFrames: number;
+    droppedFrames: number;
+    frameSequencerStep: number;
+    channelEnabled: [boolean, boolean, boolean, boolean];
+  } {
+    return this.apu.getDebugState();
   }
 
   public exportSaveRam(): Uint8Array | null {
