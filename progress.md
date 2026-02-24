@@ -306,3 +306,12 @@ Original prompt: Implement a browser gameboy emulator that can load and play rom
   - `npm run -s test:e2e` ✅
   - `npm run -s test:compat` ✅
   - `npm run -s format:check` ✅
+- Vercel access + deployment automation updates:
+  - updated Vercel project (`bypass-ai/gb-emu`) access control via API: `ssoProtection` set to `null` so production URL is publicly accessible without auth,
+  - added CI production deployment job in `.github/workflows/ci.yml` (`deploy_production`) gated on successful `build_and_compat` + `e2e` jobs for `main` pushes,
+  - deploy job uses Vercel CLI prebuilt flow (`vercel pull`, `vercel build --prod`, `vercel deploy --prebuilt --prod`) with `VERCEL_TOKEN` secret,
+  - pinned deploy job to project/org IDs for the current Vercel target project (`gb-emu`).
+- README updated with:
+  - CI auto-deploy behavior,
+  - required `VERCEL_TOKEN` secret,
+  - explicit note that project production access is public (no auth prompt).

@@ -75,6 +75,11 @@ CI (GitHub Actions) runs:
 - `npm run test:compat:mapper:shadow` (optional informational RTC diagnostics, non-blocking)
 - `npm run test:compat:report` (generates CI-friendly summary)
 - `npm run test:e2e` (deterministic smoke + optional local Tetris smoke that skips without `tests/roms/tetris.gb`)
+- Vercel production deploy on successful `main` pushes (after build + compat + e2e jobs pass)
+
+For CI-driven Vercel production deploys, configure this GitHub secret:
+
+- `VERCEL_TOKEN` (token scoped to the `bypass-ai` team/project)
 
 Auto-format locally:
 
@@ -103,6 +108,8 @@ Compatibility artifacts are emitted to `test-results/compat/`:
 
 Tier-3B and mapper-required suites are promoted into strict gating (experimental policy, promoted on green).
 `mapper-mbc3-rtc-shadow` remains informational and non-blocking.
+
+Vercel project access is configured public (no auth prompt for the production URL).
 
 ## Notes
 
