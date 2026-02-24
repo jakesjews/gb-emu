@@ -80,6 +80,10 @@ Compatibility artifacts are emitted to `test-results/compat/`:
 - `mooneye-tier3b.json` (when shadow tier is run)
 - `summary.md`
 
+Tier-3B shadow currently covers 11 DMG-in-scope ROMs.
+`acceptance/oam_dma/sources-GS.gb` is intentionally excluded because it requires MBC5 (`0x1B`), which is out of current cartridge scope.
+Promotion policy: Tier-3B moves into strict required gating after 3 consecutive green shadow runs on `main`.
+
 ## Notes
 
 - This project does not distribute commercial ROMs.

@@ -31,14 +31,16 @@ function buildSummary(reports, strictFailures) {
     '',
     `- Generated at: ${generatedAt}`,
     `- Strict mode: ${STRICT_COMPAT ? 'enabled' : 'disabled'}`,
+    '- Tier-3B (`mooneye-tier3b`) is informational shadow coverage until promotion.',
     '',
     '| Suite | Tier | Strict | Total | Pass | Fail | Timeout | Skipped |',
     '| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |',
   ];
 
   for (const report of reports) {
+    const tierLabel = report.tier === 'tier3b' ? 'tier3b (shadow)' : report.tier;
     lines.push(
-      `| ${report.suite} | ${report.tier} | ${report.strict ? 'yes' : 'no'} | ${report.totals.total} | ${report.totals.passed} | ${report.totals.failed} | ${report.totals.timedOut} | ${report.totals.skipped} |`,
+      `| ${report.suite} | ${tierLabel} | ${report.strict ? 'yes' : 'no'} | ${report.totals.total} | ${report.totals.passed} | ${report.totals.failed} | ${report.totals.timedOut} | ${report.totals.skipped} |`,
     );
   }
 

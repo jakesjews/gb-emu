@@ -36,6 +36,8 @@ export class Bus {
 
   private dmaStartDelayCycles = 0;
 
+  private dmaRestartPending = false;
+
   public constructor(
     mmu: MMU,
     ppu: PPU,
@@ -69,6 +71,7 @@ export class Bus {
     this.dmaByteIndex = 0;
     this.dmaCycleAccumulator = 0;
     this.dmaStartDelayCycles = 0;
+    this.dmaRestartPending = false;
   }
 
   public tick(cycles: number): void {
@@ -82,6 +85,9 @@ export class Bus {
       const consumed = Math.min(this.dmaStartDelayCycles, remaining);
       this.dmaStartDelayCycles -= consumed;
       remaining -= consumed;
+      if (this.dmaStartDelayCycles === 0) {
+        this.dmaRestartPending = false;
+      }
     }
 
     if (remaining <= 0 || this.dmaStartDelayCycles > 0) {
@@ -101,6 +107,7 @@ export class Bus {
         this.dmaByteIndex = 0;
         this.dmaCycleAccumulator = 0;
         this.dmaStartDelayCycles = 0;
+        this.dmaRestartPending = false;
       }
     }
   }
@@ -140,7 +147,7 @@ export class Bus {
     }
 
     if (addr <= 0xfe9f) {
-      if (this.dmaActive || !this.ppu.canReadOAM()) {
+      if (this.isDmaBlockingActive() || !this.ppu.canReadOAM()) {
         return 0xff;
       }
       return this.ppu.readOAM(addr - 0xfe00);
@@ -238,7 +245,7 @@ export class Bus {
     }
 
     if (addr <= 0xfe9f) {
-      if (this.dmaActive || !this.ppu.canWriteOAM()) {
+      if (this.isDmaBlockingActive() || !this.ppu.canWriteOAM()) {
         return;
       }
       this.ppu.writeOAM(addr - 0xfe00, masked);
@@ -324,15 +331,17 @@ export class Bus {
   }
 
   private startDmaTransfer(page: number): void {
+    const wasActive = this.dmaActive;
     this.dmaActive = true;
     this.dmaSourceBase = (page & 0xff) << 8;
     this.dmaByteIndex = 0;
     this.dmaCycleAccumulator = 0;
     this.dmaStartDelayCycles = Bus.DMA_START_DELAY_CYCLES;
+    this.dmaRestartPending = wasActive;
   }
 
   private isCpuDmaBlockedAddress(address: number): boolean {
-    if (!this.dmaActive) {
+    if (!this.isDmaBlockingActive()) {
       return false;
     }
 
@@ -400,7 +409,7 @@ export class Bus {
   }
 
   private readCpuDmaBlockedValue(address: number): number {
-    if (!this.dmaActive) {
+    if (!this.isDmaBlockingActive()) {
       return 0xff;
     }
 
@@ -410,5 +419,18 @@ export class Bus {
 
     const sourceAddress = (this.dmaSourceBase + this.dmaByteIndex) & 0xffff;
     return this.readDmaSourceByte(sourceAddress);
+  }
+
+  private isDmaBlockingActive(): boolean {
+    if (!this.dmaActive) {
+      return false;
+    }
+
+    if (this.dmaRestartPending) {
+      return true;
+    }
+
+    // Fresh DMA starts blocking one M-cycle after the FF46 write.
+    return this.dmaStartDelayCycles <= 8;
   }
 }

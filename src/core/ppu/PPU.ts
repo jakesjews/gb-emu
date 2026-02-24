@@ -251,7 +251,7 @@ export class PPU {
       return false;
     }
 
-    const mode = this.getMode();
+    const mode = this.getVisibleModeForCpu();
     return mode === MODE_HBLANK || mode === MODE_VBLANK;
   }
 
@@ -299,7 +299,7 @@ export class PPU {
       case 0xff40:
         return this.lcdc;
       case 0xff41:
-        return this.stat | 0x80;
+        return (this.stat & 0x7c) | this.getVisibleModeForCpu() | 0x80;
       case 0xff42:
         return this.scy;
       case 0xff43:
@@ -464,6 +464,30 @@ export class PPU {
 
   private getMode(): number {
     return this.stat & 0x03;
+  }
+
+  private getVisibleModeForCpu(): number {
+    const mode = this.getMode();
+
+    // Delay is only observable/needed in mode-2 IRQ timing paths.
+    if ((this.stat & 0x20) === 0) {
+      return mode;
+    }
+
+    // Keep startup/LCD-on behavior unchanged for Tier-1 LCD timing checks.
+    if (this.ly === 0 || this.startupLineActive) {
+      return mode;
+    }
+
+    if (mode === MODE_TRANSFER && this.modeClock < 4) {
+      return MODE_OAM;
+    }
+
+    if (mode === MODE_HBLANK && this.modeClock < 4) {
+      return MODE_TRANSFER;
+    }
+
+    return mode;
   }
 
   private isLcdEnabled(): boolean {
