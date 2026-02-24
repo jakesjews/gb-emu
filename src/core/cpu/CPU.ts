@@ -8,7 +8,7 @@ function toSigned8(value: number): number {
 }
 
 function isHalfCarryAdd8(a: number, b: number, carry = 0): boolean {
-  return ((a & 0x0f) + (b & 0x0f) + carry) > 0x0f;
+  return (a & 0x0f) + (b & 0x0f) + carry > 0x0f;
 }
 
 function isCarryAdd8(a: number, b: number, carry = 0): boolean {
@@ -16,7 +16,7 @@ function isCarryAdd8(a: number, b: number, carry = 0): boolean {
 }
 
 function isHalfBorrowSub8(a: number, b: number, carry = 0): boolean {
-  return ((a & 0x0f) - (b & 0x0f) - carry) < 0;
+  return (a & 0x0f) - (b & 0x0f) - carry < 0;
 }
 
 function isBorrowSub8(a: number, b: number, carry = 0): boolean {
@@ -40,20 +40,26 @@ export class CPU {
 
   private timerEarlyTickCycles = 0;
 
+  private nonTimerEarlyTickCycles = 0;
+
   private readonly bus: Bus;
 
   private readonly interrupts: InterruptController;
 
   private readonly timerTickHook?: (cycles: number) => void;
 
+  private readonly nonTimerTickHook?: (cycles: number) => void;
+
   public constructor(
     bus: Bus,
     interrupts: InterruptController,
     timerTickHook?: (cycles: number) => void,
+    nonTimerTickHook?: (cycles: number) => void,
   ) {
     this.bus = bus;
     this.interrupts = interrupts;
     this.timerTickHook = timerTickHook;
+    this.nonTimerTickHook = nonTimerTickHook;
   }
 
   public reset(): void {
@@ -68,26 +74,23 @@ export class CPU {
 
   public step(): number {
     this.timerEarlyTickCycles = 0;
+    this.nonTimerEarlyTickCycles = 0;
 
     if (this.pendingEnableIme) {
       this.ime = true;
       this.pendingEnableIme = false;
     }
 
-    if (this.interrupts.hasPending()) {
+    const pendingMask = this.interrupts.getPendingMask();
+    if (pendingMask !== 0) {
       if (this.halted) {
         this.halted = false;
       }
 
       if (this.ime) {
-        const vector = this.interrupts.consumeNextPendingVector();
-        if (vector !== null) {
-          this.ime = false;
-          this.push16(this.registers.pc);
-          this.registers.pc = vector;
-          this.cycles += 20;
-          return 20;
-        }
+        const elapsed = this.serviceInterrupt();
+        this.cycles += elapsed;
+        return elapsed;
       }
     }
 
@@ -103,9 +106,43 @@ export class CPU {
     return elapsed;
   }
 
+  private serviceInterrupt(): number {
+    this.ime = false;
+    this.pendingEnableIme = false;
+
+    const pc = this.registers.pc;
+    const hi = (pc >> 8) & 0xff;
+    const lo = pc & 0xff;
+
+    // Interrupt dispatch has stack side effects before final vector resolution.
+    this.registers.sp = (this.registers.sp - 1) & 0xffff;
+    this.bus.write8(this.registers.sp, hi);
+
+    const pendingAfterHighPush = this.interrupts.getPendingMask();
+    const selectedMask = this.interrupts.getHighestPriorityPendingMask(pendingAfterHighPush);
+
+    this.registers.sp = (this.registers.sp - 1) & 0xffff;
+    this.bus.write8(this.registers.sp, lo);
+
+    if (selectedMask === 0) {
+      this.registers.pc = 0x0000;
+      return 20;
+    }
+
+    const vector = this.interrupts.consumePendingByMask(selectedMask) ?? 0x0000;
+    this.registers.pc = vector;
+    return 20;
+  }
+
   public consumeTimerEarlyTickCycles(): number {
     const cycles = this.timerEarlyTickCycles;
     this.timerEarlyTickCycles = 0;
+    return cycles;
+  }
+
+  public consumeNonTimerEarlyTickCycles(): number {
+    const cycles = this.nonTimerEarlyTickCycles;
+    this.nonTimerEarlyTickCycles = 0;
     return cycles;
   }
 
@@ -212,12 +249,21 @@ export class CPU {
 
       const dst = (opcode >> 3) & 0x07;
       const src = opcode & 0x07;
+      if (src === 6) {
+        this.tickNonTimerEarly(4);
+      }
+      if (dst === 6) {
+        this.tickNonTimerEarly(4);
+      }
       this.writeR(dst, this.readR(src));
       return dst === 6 || src === 6 ? 8 : 4;
     }
 
     if (opcode >= 0x80 && opcode <= 0xbf) {
       const src = opcode & 0x07;
+      if (src === 6) {
+        this.tickNonTimerEarly(4);
+      }
       const value = this.readR(src);
 
       switch ((opcode >> 3) & 0x07) {
@@ -260,6 +306,7 @@ export class CPU {
         this.registers.bc = this.fetch16();
         return 12;
       case 0x02:
+        this.tickNonTimerEarly(4);
         this.bus.write8(this.registers.bc, this.registers.a);
         return 8;
       case 0x03:
@@ -286,6 +333,7 @@ export class CPU {
         this.addHL(this.registers.bc);
         return 8;
       case 0x0a:
+        this.tickNonTimerEarly(4);
         this.registers.a = this.bus.read8(this.registers.bc);
         return 8;
       case 0x0b:
@@ -313,6 +361,7 @@ export class CPU {
         this.registers.de = this.fetch16();
         return 12;
       case 0x12:
+        this.tickNonTimerEarly(4);
         this.bus.write8(this.registers.de, this.registers.a);
         return 8;
       case 0x13:
@@ -340,6 +389,7 @@ export class CPU {
         this.addHL(this.registers.de);
         return 8;
       case 0x1a:
+        this.tickNonTimerEarly(4);
         this.registers.a = this.bus.read8(this.registers.de);
         return 8;
       case 0x1b:
@@ -364,6 +414,7 @@ export class CPU {
         this.registers.hl = this.fetch16();
         return 12;
       case 0x22:
+        this.tickNonTimerEarly(4);
         this.bus.write8(this.registers.hl, this.registers.a);
         this.registers.hl = (this.registers.hl + 1) & 0xffff;
         return 8;
@@ -388,6 +439,7 @@ export class CPU {
         this.addHL(this.registers.hl);
         return 8;
       case 0x2a:
+        this.tickNonTimerEarly(4);
         this.registers.a = this.bus.read8(this.registers.hl);
         this.registers.hl = (this.registers.hl + 1) & 0xffff;
         return 8;
@@ -404,7 +456,7 @@ export class CPU {
         this.registers.l = this.fetch8();
         return 8;
       case 0x2f:
-        this.registers.a = (~this.registers.a) & 0xff;
+        this.registers.a = ~this.registers.a & 0xff;
         this.registers.setSubtract(true);
         this.registers.setHalfCarry(true);
         return 4;
@@ -415,6 +467,7 @@ export class CPU {
         this.registers.sp = this.fetch16();
         return 12;
       case 0x32:
+        this.tickNonTimerEarly(4);
         this.bus.write8(this.registers.hl, this.registers.a);
         this.registers.hl = (this.registers.hl - 1) & 0xffff;
         return 8;
@@ -451,6 +504,7 @@ export class CPU {
         this.addHL(this.registers.sp);
         return 8;
       case 0x3a:
+        this.tickNonTimerEarly(4);
         this.registers.a = this.bus.read8(this.registers.hl);
         this.registers.hl = (this.registers.hl - 1) & 0xffff;
         return 8;
@@ -562,6 +616,7 @@ export class CPU {
         {
           const offset = this.fetch8();
           this.tickTimerEarly(4);
+          this.tickNonTimerEarly(4);
           this.bus.write8(0xff00 + offset, this.registers.a);
         }
         return 12;
@@ -569,6 +624,7 @@ export class CPU {
         this.registers.hl = this.pop16();
         return 12;
       case 0xe2:
+        this.tickNonTimerEarly(4);
         this.bus.write8(0xff00 + this.registers.c, this.registers.a);
         return 8;
       case 0xe3:
@@ -593,6 +649,7 @@ export class CPU {
         {
           const address = this.fetch16();
           this.tickTimerEarly(8);
+          this.tickNonTimerEarly(8);
           this.bus.write8(address, this.registers.a);
         }
         return 16;
@@ -611,6 +668,7 @@ export class CPU {
         {
           const offset = this.fetch8();
           this.tickTimerEarly(4);
+          this.tickNonTimerEarly(4);
           this.registers.a = this.bus.read8(0xff00 + offset);
         }
         return 12;
@@ -618,6 +676,7 @@ export class CPU {
         this.registers.af = this.pop16();
         return 12;
       case 0xf2:
+        this.tickNonTimerEarly(4);
         this.registers.a = this.bus.read8(0xff00 + this.registers.c);
         return 8;
       case 0xf3:
@@ -645,6 +704,7 @@ export class CPU {
         {
           const address = this.fetch16();
           this.tickTimerEarly(8);
+          this.tickNonTimerEarly(8);
           this.registers.a = this.bus.read8(address);
         }
         return 16;
@@ -832,7 +892,7 @@ export class CPU {
     const result = (value + 1) & 0xff;
     this.registers.setZero(result === 0);
     this.registers.setSubtract(false);
-    this.registers.setHalfCarry(((value & 0x0f) + 1) > 0x0f);
+    this.registers.setHalfCarry((value & 0x0f) + 1 > 0x0f);
     return result;
   }
 
@@ -848,7 +908,7 @@ export class CPU {
     const hl = this.registers.hl;
     const result = (hl + value) & 0xffff;
     this.registers.setSubtract(false);
-    this.registers.setHalfCarry(((hl & 0x0fff) + (value & 0x0fff)) > 0x0fff);
+    this.registers.setHalfCarry((hl & 0x0fff) + (value & 0x0fff) > 0x0fff);
     this.registers.setCarry(hl + value > 0xffff);
     this.registers.hl = result;
   }
@@ -977,8 +1037,8 @@ export class CPU {
 
     this.registers.setZero(false);
     this.registers.setSubtract(false);
-    this.registers.setHalfCarry(((sp & 0x0f) + (rawOffset & 0x0f)) > 0x0f);
-    this.registers.setCarry(((sp & 0xff) + (rawOffset & 0xff)) > 0xff);
+    this.registers.setHalfCarry((sp & 0x0f) + (rawOffset & 0x0f) > 0x0f);
+    this.registers.setCarry((sp & 0xff) + (rawOffset & 0xff) > 0xff);
 
     this.registers.sp = result;
   }
@@ -990,8 +1050,8 @@ export class CPU {
 
     this.registers.setZero(false);
     this.registers.setSubtract(false);
-    this.registers.setHalfCarry(((sp & 0x0f) + (rawOffset & 0x0f)) > 0x0f);
-    this.registers.setCarry(((sp & 0xff) + (rawOffset & 0xff)) > 0xff);
+    this.registers.setHalfCarry((sp & 0x0f) + (rawOffset & 0x0f) > 0x0f);
+    this.registers.setCarry((sp & 0xff) + (rawOffset & 0xff) > 0xff);
 
     this.registers.hl = result;
   }
@@ -1003,5 +1063,14 @@ export class CPU {
 
     this.timerEarlyTickCycles += cycles;
     this.timerTickHook?.(cycles);
+  }
+
+  private tickNonTimerEarly(cycles: number): void {
+    if (cycles <= 0) {
+      return;
+    }
+
+    this.nonTimerEarlyTickCycles += cycles;
+    this.nonTimerTickHook?.(cycles);
   }
 }

@@ -1,6 +1,7 @@
 Original prompt: Implement a browser gameboy emulator that can load and play roms
 
 ## 2026-02-23
+
 - Created Vite + TypeScript project skeleton in an empty repository.
 - Added planned folder structure for emulator core, runtime, UI, and tests.
 - Next: implement CPU/MMU/timer/interrupt/cartridge core with ROM+MBC1 support.
@@ -37,3 +38,48 @@ Original prompt: Implement a browser gameboy emulator that can load and play rom
   - `npm run build` passes.
 - Manual browser verification with `tests/roms/tetris.gb`:
   - keyboard `Enter` now advances from title `1 PLAYER / 2 PLAYER` to subsequent menus (`GAME TYPE / MUSIC TYPE`, then `B-TYPE` level screen).
+
+## 2026-02-24
+
+- Continued DMG Tier-1 compatibility sweep implementation and validation.
+- Confirmed Tier-1 compat harness expansion is in place:
+  - `tests/compat/mooneye.compat.test.ts` for required mooneye acceptance ROMs,
+  - `tests/compat/compatTypes.ts` with `CompatResult` shape (`name`, `status`, `cycles`, `pc`, `opcode`, `bc/de/hl`, `serialTail`),
+  - `scripts/fetch_test_roms.sh` pinned mooneye bundle fetch/extract.
+- Confirmed non-breaking debug/test surfacing is in place:
+  - `window.render_game_to_text()` payload includes `frame_hash` and `compat_flags`,
+  - deterministic `window.advanceTime(ms)` remains available.
+- Removed temporary debug artifact `tests/unit/_tetris_debug.test.ts` to keep unit suite clean.
+- Hardened optional local Tetris smoke test `tests/e2e/tetris.local.spec.ts`:
+  - switched from wall-clock waits to deterministic `advanceTime` stepping,
+  - added deterministic key-hold input helper,
+  - updated startup/menu traversal sequence to reliably reach gameplay,
+  - added bounded fallback progression before asserting frame dynamics.
+- Validation pass completed:
+  - `npm run -s test:unit` ✅
+  - `npm run -s test:compat` ✅ (blargg subset + mooneye Tier-1 required set)
+  - `npm run -s test:e2e -- tests/e2e/tetris.local.spec.ts` ✅ (with local `tests/roms/tetris.gb`)
+  - `npm run -s build` ✅
+- Additional browser sanity check via develop-web-game Playwright client:
+  - generated `output/web-game/shot-*.png` and `state-*.json`,
+  - verified no console/page errors in generated artifacts.
+- Added GitHub Actions CI workflow at `.github/workflows/ci.yml`:
+  - `Build + Unit + Compat` job runs `npm ci`, `npm run build`, and `npm run test`.
+  - `E2E Smoke` job installs Playwright Chromium and runs `npm run test:e2e`.
+  - Uploads Playwright artifacts (`test-results`, `playwright-report`) for debugging.
+- Updated README test section with CI behavior and ROM-asset skip semantics.
+- Local validation after CI add:
+  - `actionlint` passes,
+  - `npm run -s build` passes,
+  - `npm run -s test` passes,
+  - `npm run -s test:e2e` passes.
+- Added Prettier tooling:
+  - installed `prettier` as a dev dependency,
+  - added scripts `npm run format` and `npm run format:check`,
+  - added project config `.prettierrc.json` and `.prettierignore`,
+  - integrated `npm run format:check` into CI build/test job.
+- Ran one-time formatting pass and revalidated:
+  - `npm run -s format:check` passes,
+  - `npm run -s build` passes,
+  - `npm run -s test` passes,
+  - `npm run -s test:e2e` passes.

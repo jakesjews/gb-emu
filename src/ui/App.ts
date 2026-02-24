@@ -29,6 +29,16 @@ function toggleFullscreen(element: HTMLElement): void {
   void document.exitFullscreen();
 }
 
+function hashFrame(frame: Uint32Array): number {
+  let hash = 2166136261 >>> 0;
+  for (let i = 0; i < frame.length; i += 1) {
+    hash ^= frame[i] >>> 0;
+    hash = Math.imul(hash, 16777619) >>> 0;
+  }
+
+  return hash >>> 0;
+}
+
 declare global {
   interface Window {
     render_game_to_text: () => string;
@@ -89,11 +99,15 @@ export class App {
       this.gameBoy.setButtonState(button, pressed);
     });
 
-    this.loop = new EmulatorLoop(this.gameBoy, () => this.gamepadManager.poll(), (stats) => {
-      this.status.fps = stats.fps;
-      this.status.frameCount = stats.frameCount;
-      this.controls.setFps(stats.fps, stats.frameCount);
-    });
+    this.loop = new EmulatorLoop(
+      this.gameBoy,
+      () => this.gamepadManager.poll(),
+      (stats) => {
+        this.status.fps = stats.fps;
+        this.status.frameCount = stats.frameCount;
+        this.controls.setFps(stats.fps, stats.frameCount);
+      },
+    );
 
     this.gameBoy.onFrameFinished((frame) => {
       this.canvasView.draw(frame);
@@ -152,7 +166,8 @@ export class App {
     window.render_game_to_text = () => {
       const snapshot = this.gameBoy.getDebugSnapshot();
       const payload = {
-        coordinate_system: 'Screen origin is top-left at (0,0), +x right, +y down, resolution 160x144.',
+        coordinate_system:
+          'Screen origin is top-left at (0,0), +x right, +y down, resolution 160x144.',
         mode: this.loop.isRunning() ? 'running' : 'paused',
         rom: this.status.romName,
         frame_count: this.status.frameCount,
@@ -178,6 +193,8 @@ export class App {
           ie: snapshot.ie,
           if: snapshot.if,
         },
+        frame_hash: hashFrame(this.gameBoy.getFrameBuffer()),
+        compat_flags: this.gameBoy.getCompatFlags(),
         joypad: this.gameBoy.getJoypadDebug(),
         serial_tail: this.gameBoy.getSerialOutput().slice(-120),
       };

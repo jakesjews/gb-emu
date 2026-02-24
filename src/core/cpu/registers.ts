@@ -74,7 +74,7 @@ export class Registers {
     if (enabled) {
       this.f = (this.f | mask) & 0xf0;
     } else {
-      this.f = (this.f & ~mask) & 0xf0;
+      this.f = this.f & ~mask & 0xf0;
     }
   }
 

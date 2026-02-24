@@ -34,9 +34,23 @@ npm run dev
 ## Tests
 
 ```bash
+npm run format:check
 npm run test:unit
-npm run test:compat   # blargg subset, skips if ROMs are not present
+npm run test:compat   # blargg + mooneye tier-1, skips missing ROM assets
 npm run test:e2e
+```
+
+CI (GitHub Actions) runs:
+
+- `npm run build`
+- `npm run format:check`
+- `npm run test` (unit + compat; ROM-backed compat cases skip when assets are absent)
+- `npm run test:e2e` (includes deterministic smoke + optional local Tetris smoke that skips without `tests/roms/tetris.gb`)
+
+Auto-format locally:
+
+```bash
+npm run format
 ```
 
 Fetch compatibility ROMs:
@@ -45,7 +59,7 @@ Fetch compatibility ROMs:
 ./scripts/fetch_test_roms.sh
 ```
 
-The ROMs are downloaded to `tests/roms/blargg` and are gitignored.
+The ROMs are downloaded to `tests/roms/blargg` and `tests/roms/mooneye` and are gitignored.
 
 ## Notes
 

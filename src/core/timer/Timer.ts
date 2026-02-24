@@ -1,6 +1,7 @@
 import { InterruptController, InterruptFlag } from '../interrupts/InterruptController';
 
 const TAC_TO_DIV_BIT: ReadonlyArray<number> = [9, 3, 5, 7];
+const TIMA_RELOAD_DELAY_CYCLES = 4;
 
 export class Timer {
   private divCounter = 0;
@@ -11,7 +12,7 @@ export class Timer {
 
   private tac = 0;
 
-  private previousSignal = 0;
+  private timaReloadDelay = 0;
 
   private readonly interrupts: InterruptController;
 
@@ -24,19 +25,19 @@ export class Timer {
     this.tima = 0;
     this.tma = 0;
     this.tac = 0;
-    this.previousSignal = 0;
+    this.timaReloadDelay = 0;
   }
 
   public tick(cycles: number): void {
     for (let i = 0; i < cycles; i += 1) {
+      const oldSignal = this.getTimerSignal();
       this.divCounter = (this.divCounter + 1) & 0xffff;
       const signal = this.getTimerSignal();
 
-      if (this.previousSignal === 1 && signal === 0) {
-        this.incrementTima();
+      if (oldSignal === 1 && signal === 0) {
+        this.incrementTimaOnFallingEdge();
       }
-
-      this.previousSignal = signal;
+      this.tickReloadPipeline();
     }
   }
 
@@ -45,8 +46,12 @@ export class Timer {
   }
 
   public writeDIV(): void {
+    const oldSignal = this.getTimerSignal();
     this.divCounter = 0;
-    this.previousSignal = this.getTimerSignal();
+    const newSignal = this.getTimerSignal();
+    if (oldSignal === 1 && newSignal === 0) {
+      this.incrementTimaOnFallingEdge();
+    }
   }
 
   public readTIMA(): number {
@@ -54,6 +59,10 @@ export class Timer {
   }
 
   public writeTIMA(value: number): void {
+    if (this.timaReloadDelay > 0) {
+      this.timaReloadDelay = 0;
+    }
+
     this.tima = value & 0xff;
   }
 
@@ -70,8 +79,16 @@ export class Timer {
   }
 
   public writeTAC(value: number): void {
+    const oldSignal = this.getTimerSignal();
     this.tac = value & 0x07;
-    this.previousSignal = this.getTimerSignal();
+    const newSignal = this.getTimerSignal();
+    if (oldSignal === 1 && newSignal === 0) {
+      this.incrementTimaOnFallingEdge();
+    }
+  }
+
+  public isReloadPending(): boolean {
+    return this.timaReloadDelay > 0;
   }
 
   private getTimerSignal(): number {
@@ -83,13 +100,27 @@ export class Timer {
     return (this.divCounter >> bit) & 0x01;
   }
 
-  private incrementTima(): void {
+  private incrementTimaOnFallingEdge(): void {
     if (this.tima === 0xff) {
-      this.tima = this.tma;
-      this.interrupts.request(InterruptFlag.Timer);
+      this.tima = 0x00;
+      this.timaReloadDelay = TIMA_RELOAD_DELAY_CYCLES;
       return;
     }
 
     this.tima = (this.tima + 1) & 0xff;
+  }
+
+  private tickReloadPipeline(): void {
+    if (this.timaReloadDelay === 0) {
+      return;
+    }
+
+    this.timaReloadDelay -= 1;
+    if (this.timaReloadDelay !== 0) {
+      return;
+    }
+
+    this.tima = this.tma;
+    this.interrupts.request(InterruptFlag.Timer);
   }
 }

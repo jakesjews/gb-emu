@@ -8,6 +8,8 @@ import { Serial } from '../serial/Serial';
 import { Timer } from '../timer/Timer';
 
 export class Bus {
+  private static readonly DMA_START_DELAY_CYCLES = 12;
+
   private cartridge: Cartridge | null = null;
 
   private readonly mmu: MMU;
@@ -23,6 +25,16 @@ export class Bus {
   private readonly serial: Serial;
 
   private readonly apu: APUStub;
+
+  private dmaActive = false;
+
+  private dmaSourceBase = 0;
+
+  private dmaByteIndex = 0;
+
+  private dmaCycleAccumulator = 0;
+
+  private dmaStartDelayCycles = 0;
 
   public constructor(
     mmu: MMU,
@@ -52,16 +64,66 @@ export class Bus {
 
   public reset(): void {
     this.mmu.reset();
+    this.dmaActive = false;
+    this.dmaSourceBase = 0;
+    this.dmaByteIndex = 0;
+    this.dmaCycleAccumulator = 0;
+    this.dmaStartDelayCycles = 0;
+  }
+
+  public tick(cycles: number): void {
+    if (!this.dmaActive || cycles <= 0) {
+      return;
+    }
+
+    let remaining = cycles;
+
+    if (this.dmaStartDelayCycles > 0) {
+      const consumed = Math.min(this.dmaStartDelayCycles, remaining);
+      this.dmaStartDelayCycles -= consumed;
+      remaining -= consumed;
+    }
+
+    if (remaining <= 0 || this.dmaStartDelayCycles > 0) {
+      return;
+    }
+
+    this.dmaCycleAccumulator += remaining;
+    while (this.dmaActive && this.dmaCycleAccumulator >= 4) {
+      this.dmaCycleAccumulator -= 4;
+      const source = (this.dmaSourceBase + this.dmaByteIndex) & 0xffff;
+      const value = this.readDmaSourceByte(source);
+      this.ppu.writeOamDirect(this.dmaByteIndex, value);
+      this.dmaByteIndex += 1;
+
+      if (this.dmaByteIndex >= 0xa0) {
+        this.dmaActive = false;
+        this.dmaByteIndex = 0;
+        this.dmaCycleAccumulator = 0;
+        this.dmaStartDelayCycles = 0;
+      }
+    }
+  }
+
+  public isDmaActive(): boolean {
+    return this.dmaActive;
   }
 
   public read8(address: number): number {
     const addr = address & 0xffff;
+
+    if (this.isCpuDmaBlockedAddress(addr)) {
+      return 0xff;
+    }
 
     if (addr <= 0x7fff) {
       return this.cartridge?.readRom(addr) ?? 0xff;
     }
 
     if (addr <= 0x9fff) {
+      if (!this.ppu.canAccessVRAM()) {
+        return 0xff;
+      }
       return this.ppu.readVRAM(addr - 0x8000);
     }
 
@@ -78,6 +140,9 @@ export class Bus {
     }
 
     if (addr <= 0xfe9f) {
+      if (this.dmaActive || !this.ppu.canAccessOAM()) {
+        return 0xff;
+      }
       return this.ppu.readOAM(addr - 0xfe00);
     }
 
@@ -140,12 +205,19 @@ export class Bus {
     const addr = address & 0xffff;
     const masked = value & 0xff;
 
+    if (this.isCpuDmaBlockedAddress(addr) && addr !== 0xff46) {
+      return;
+    }
+
     if (addr <= 0x7fff) {
       this.cartridge?.writeRom(addr, masked);
       return;
     }
 
     if (addr <= 0x9fff) {
+      if (!this.ppu.canAccessVRAM()) {
+        return;
+      }
       this.ppu.writeVRAM(addr - 0x8000, masked);
       return;
     }
@@ -166,6 +238,9 @@ export class Bus {
     }
 
     if (addr <= 0xfe9f) {
+      if (this.dmaActive || !this.ppu.canAccessOAM()) {
+        return;
+      }
       this.ppu.writeOAM(addr - 0xfe00, masked);
       return;
     }
@@ -222,7 +297,7 @@ export class Bus {
     if (addr >= 0xff40 && addr <= 0xff4b) {
       this.ppu.writeRegister(addr, masked);
       if (addr === 0xff46) {
-        this.doDmaTransfer(masked);
+        this.startDmaTransfer(masked);
       }
       return;
     }
@@ -248,11 +323,53 @@ export class Bus {
     this.write8((address + 1) & 0xffff, (value >> 8) & 0xff);
   }
 
-  private doDmaTransfer(page: number): void {
-    const source = (page & 0xff) << 8;
-    for (let i = 0; i < 0xa0; i += 1) {
-      const value = this.read8((source + i) & 0xffff);
-      this.ppu.writeOamDirect(i, value);
+  private startDmaTransfer(page: number): void {
+    this.dmaActive = true;
+    this.dmaSourceBase = (page & 0xff) << 8;
+    this.dmaByteIndex = 0;
+    this.dmaCycleAccumulator = 0;
+    this.dmaStartDelayCycles = Bus.DMA_START_DELAY_CYCLES;
+  }
+
+  private isCpuDmaBlockedAddress(address: number): boolean {
+    if (!this.dmaActive) {
+      return false;
     }
+
+    return !this.isHramAddress(address);
+  }
+
+  private isHramAddress(address: number): boolean {
+    return address >= 0xff80 && address <= 0xfffe;
+  }
+
+  private readDmaSourceByte(address: number): number {
+    const addr = address & 0xffff;
+
+    if (addr <= 0x7fff) {
+      return this.cartridge?.readRom(addr) ?? 0xff;
+    }
+
+    if (addr <= 0x9fff) {
+      return this.ppu.readVRAM(addr - 0x8000);
+    }
+
+    if (addr <= 0xbfff) {
+      return this.cartridge?.readRam(addr - 0xa000) ?? 0xff;
+    }
+
+    if (addr <= 0xdfff) {
+      return this.mmu.wram[addr - 0xc000];
+    }
+
+    if (addr <= 0xfdff) {
+      return this.mmu.wram[addr - 0xe000];
+    }
+
+    if (addr <= 0xfe9f) {
+      return this.ppu.readOAM(addr - 0xfe00);
+    }
+
+    return 0xff;
   }
 }

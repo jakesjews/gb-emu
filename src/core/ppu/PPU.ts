@@ -45,6 +45,18 @@ export class PPU {
 
   private lastStatLine = false;
 
+  private startupLineActive = false;
+
+  private startupHblankShorten = 0;
+
+  private lineHblankShorten = 0;
+
+  private oamStartDelayCycles = 0;
+
+  private oamDurationCycles = 80;
+
+  private lycUpdateDelayCycles = 0;
+
   public constructor(interrupts: InterruptController) {
     this.interrupts = interrupts;
   }
@@ -68,25 +80,44 @@ export class PPU {
     this.modeClock = 0;
     this.frameReady = false;
     this.lastStatLine = false;
+    this.startupLineActive = false;
+    this.startupHblankShorten = 0;
+    this.lineHblankShorten = 0;
+    this.oamStartDelayCycles = 0;
+    this.oamDurationCycles = 80;
+    this.lycUpdateDelayCycles = 0;
     this.setMode(MODE_OAM);
+    this.updateLycCoincidence();
+    this.updateStatInterrupt();
   }
 
   public tick(cycles: number): void {
-    if ((this.lcdc & 0x80) === 0) {
+    if (!this.isLcdEnabled()) {
       return;
     }
 
     let remaining = cycles;
     while (remaining > 0) {
-      const step = Math.min(remaining, 4);
+      const step = 1;
       remaining -= step;
       this.modeClock += step;
 
+      if (this.lycUpdateDelayCycles > 0) {
+        this.lycUpdateDelayCycles -= step;
+        if (this.lycUpdateDelayCycles <= 0) {
+          this.lycUpdateDelayCycles = 0;
+          this.stat |= 0x04;
+          this.updateStatInterrupt();
+        }
+      }
+
       switch (this.getMode()) {
         case MODE_OAM:
-          if (this.modeClock >= 80) {
-            this.modeClock -= 80;
+          if (this.modeClock >= this.oamDurationCycles) {
+            this.modeClock -= this.oamDurationCycles;
+            this.oamDurationCycles = 80;
             this.setMode(MODE_TRANSFER);
+            this.updateStatInterrupt();
           }
           break;
 
@@ -98,22 +129,63 @@ export class PPU {
             }
 
             this.setMode(MODE_HBLANK);
+            this.updateStatInterrupt();
           }
           break;
 
         case MODE_HBLANK:
-          if (this.modeClock >= 204) {
-            this.modeClock -= 204;
+          if (this.oamStartDelayCycles > 0) {
+            if (this.modeClock >= this.oamStartDelayCycles) {
+              this.modeClock -= this.oamStartDelayCycles;
+              this.oamStartDelayCycles = 0;
+              this.setMode(MODE_OAM);
+              this.updateStatInterrupt();
+            }
+            break;
+          }
+
+          if (this.startupLineActive && this.ly === 0) {
+            // LCD-enable startup begins in mode 0 before the first transfer.
+            if (this.modeClock >= 81) {
+              this.modeClock -= 81;
+              this.startupLineActive = false;
+              this.startupHblankShorten = 1;
+              this.setMode(MODE_TRANSFER);
+              this.updateStatInterrupt();
+            }
+            break;
+          }
+
+          const hblankDuration =
+            204 - (this.ly === 0 ? this.startupHblankShorten : this.lineHblankShorten);
+          if (this.modeClock >= hblankDuration) {
+            this.modeClock -= hblankDuration;
+            if (this.ly === 0) {
+              this.startupHblankShorten = 0;
+            } else {
+              this.lineHblankShorten = 0;
+            }
             this.ly = (this.ly + 1) & 0xff;
-            this.updateLycCoincidence();
+            this.handleLyIncremented();
 
             if (this.ly === 144) {
+              this.oamStartDelayCycles = 0;
+              this.oamDurationCycles = 80;
+              this.lineHblankShorten = 0;
+              // DMG quirk: mode-2 STAT source can assert on the mode 1 transition.
+              if ((this.stat & 0x20) !== 0) {
+                this.interrupts.request(InterruptFlag.LCDStat);
+              }
               this.setMode(MODE_VBLANK);
               this.interrupts.request(InterruptFlag.VBlank);
               this.frameReady = true;
             } else {
-              this.setMode(MODE_OAM);
+              this.setMode(MODE_HBLANK);
+              this.oamStartDelayCycles = 1;
+              this.oamDurationCycles = 80;
+              this.lineHblankShorten = 1;
             }
+            this.updateStatInterrupt();
           }
           break;
 
@@ -121,12 +193,17 @@ export class PPU {
           if (this.modeClock >= 456) {
             this.modeClock -= 456;
             this.ly += 1;
-            this.updateLycCoincidence();
+            this.handleLyIncremented();
+            this.updateStatInterrupt();
 
             if (this.ly > 153) {
               this.ly = 0;
-              this.updateLycCoincidence();
+              this.handleLyIncremented();
+              this.oamStartDelayCycles = 0;
+              this.oamDurationCycles = 80;
+              this.lineHblankShorten = 0;
               this.setMode(MODE_OAM);
+              this.updateStatInterrupt();
             }
           }
           break;
@@ -134,9 +211,32 @@ export class PPU {
         default:
           break;
       }
-
-      this.updateStatInterrupt();
     }
+  }
+
+  public canAccessVRAM(): boolean {
+    if (!this.isLcdEnabled()) {
+      return true;
+    }
+
+    if (this.getMode() === MODE_OAM && this.modeClock >= this.oamDurationCycles - 1) {
+      return false;
+    }
+
+    return this.getMode() !== MODE_TRANSFER;
+  }
+
+  public canAccessOAM(): boolean {
+    if (!this.isLcdEnabled()) {
+      return true;
+    }
+
+    if (this.oamStartDelayCycles > 0) {
+      return false;
+    }
+
+    const mode = this.getMode();
+    return mode === MODE_HBLANK || mode === MODE_VBLANK;
   }
 
   public readVRAM(address: number): number {
@@ -148,15 +248,17 @@ export class PPU {
   }
 
   public readOAM(address: number): number {
-    return this.oam[address & 0x009f];
+    return this.oam[address % this.oam.length] ?? 0xff;
   }
 
   public writeOAM(address: number, value: number): void {
-    this.oam[address & 0x009f] = value & 0xff;
+    const index = address % this.oam.length;
+    this.oam[index] = value & 0xff;
   }
 
   public writeOamDirect(index: number, value: number): void {
-    this.oam[index & 0x009f] = value & 0xff;
+    const oamIndex = index % this.oam.length;
+    this.oam[oamIndex] = value & 0xff;
   }
 
   public readRegister(address: number): number {
@@ -194,18 +296,42 @@ export class PPU {
     const masked = value & 0xff;
 
     switch (address) {
-      case 0xff40:
+      case 0xff40: {
+        const wasEnabled = this.isLcdEnabled();
         this.lcdc = masked;
-        if ((masked & 0x80) === 0) {
+        const isEnabled = this.isLcdEnabled();
+
+        if (wasEnabled && !isEnabled) {
           this.modeClock = 0;
           this.ly = 0;
+          this.startupLineActive = false;
+          this.startupHblankShorten = 0;
+          this.lineHblankShorten = 0;
+          this.oamStartDelayCycles = 0;
+          this.oamDurationCycles = 80;
+          this.lycUpdateDelayCycles = 0;
           this.setMode(MODE_HBLANK);
           this.frameReady = true;
-        } else if (this.getMode() === MODE_HBLANK && this.ly === 0) {
-          this.setMode(MODE_OAM);
+          // LYC coincidence and its interrupt line are frozen while LCD is off.
+          this.updateStatInterrupt();
+          break;
         }
-        this.updateLycCoincidence();
+
+        if (!wasEnabled && isEnabled) {
+          this.modeClock = 0;
+          this.ly = 0;
+          this.startupLineActive = true;
+          this.startupHblankShorten = 0;
+          this.lineHblankShorten = 0;
+          this.oamStartDelayCycles = 0;
+          this.oamDurationCycles = 80;
+          this.lycUpdateDelayCycles = 0;
+          this.setMode(MODE_HBLANK);
+          this.updateLycCoincidence();
+          this.updateStatInterrupt();
+        }
         break;
+      }
       case 0xff41:
         this.stat = (this.stat & 0x07) | (masked & 0x78);
         this.updateStatInterrupt();
@@ -218,12 +344,19 @@ export class PPU {
         break;
       case 0xff44:
         this.ly = 0;
-        this.updateLycCoincidence();
+        if (this.isLcdEnabled()) {
+          this.lycUpdateDelayCycles = 0;
+          this.updateLycCoincidence();
+          this.updateStatInterrupt();
+        }
         break;
       case 0xff45:
         this.lyc = masked;
-        this.updateLycCoincidence();
-        this.updateStatInterrupt();
+        if (this.isLcdEnabled()) {
+          this.lycUpdateDelayCycles = 0;
+          this.updateLycCoincidence();
+          this.updateStatInterrupt();
+        }
         break;
       case 0xff46:
         this.dma = masked;
@@ -278,20 +411,30 @@ export class PPU {
   }
 
   private renderCurrentLine(): void {
-    renderScanline(this.frameBuffer, this.vram, this.oam, {
-      lcdc: this.lcdc,
-      scx: this.scx,
-      scy: this.scy,
-      wy: this.wy,
-      wx: this.wx,
-      bgp: this.bgp,
-      obp0: this.obp0,
-      obp1: this.obp1,
-    }, this.ly);
+    renderScanline(
+      this.frameBuffer,
+      this.vram,
+      this.oam,
+      {
+        lcdc: this.lcdc,
+        scx: this.scx,
+        scy: this.scy,
+        wy: this.wy,
+        wx: this.wx,
+        bgp: this.bgp,
+        obp0: this.obp0,
+        obp1: this.obp1,
+      },
+      this.ly,
+    );
   }
 
   private getMode(): number {
     return this.stat & 0x03;
+  }
+
+  private isLcdEnabled(): boolean {
+    return (this.lcdc & 0x80) !== 0;
   }
 
   private setMode(mode: number): void {
@@ -319,5 +462,15 @@ export class PPU {
     }
 
     this.lastStatLine = line;
+  }
+
+  private handleLyIncremented(): void {
+    if (this.ly === this.lyc) {
+      this.lycUpdateDelayCycles = 1;
+      return;
+    }
+
+    this.lycUpdateDelayCycles = 0;
+    this.stat &= ~0x04;
   }
 }

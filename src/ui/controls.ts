@@ -56,7 +56,12 @@ export class Controls {
     this.stepInstructionButton = this.makeButton('Step Op', handlers.onStepInstruction);
     this.stepFrameButton = this.makeButton('Step Frame', handlers.onStepFrame);
 
-    buttons.append(this.runButton, this.resetButton, this.stepInstructionButton, this.stepFrameButton);
+    buttons.append(
+      this.runButton,
+      this.resetButton,
+      this.stepInstructionButton,
+      this.stepFrameButton,
+    );
 
     const status = document.createElement('div');
     status.className = 'status-grid';
@@ -75,7 +80,8 @@ export class Controls {
 
     const help = document.createElement('p');
     help.className = 'help';
-    help.textContent = 'Keyboard: arrows = D-pad, X = A, Z = B, Enter = Start, Shift = Select, F = fullscreen.';
+    help.textContent =
+      'Keyboard: arrows = D-pad, X = A, Z = B, Enter = Start, Shift = Select, F = fullscreen.';
 
     this.root.append(title, subtitle, uploadRow, buttons, status, help);
     parent.append(this.root);

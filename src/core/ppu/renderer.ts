@@ -26,7 +26,7 @@ function tileDataAddress(lcdc: number, tileNumber: number): number {
 }
 
 function readTileColorId(vram: Uint8Array, address: number, x: number, y: number): number {
-  const rowAddress = address + (y * 2);
+  const rowAddress = address + y * 2;
   const lo = vram[rowAddress] ?? 0;
   const hi = vram[rowAddress + 1] ?? 0;
   const bit = 7 - x;

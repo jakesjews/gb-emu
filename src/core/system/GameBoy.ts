@@ -27,11 +27,26 @@ export class GameBoy {
 
   private readonly apu = new APUStub();
 
-  private readonly bus = new Bus(this.mmu, this.ppu, this.timer, this.interrupts, this.joypad, this.serial, this.apu);
+  private readonly bus = new Bus(
+    this.mmu,
+    this.ppu,
+    this.timer,
+    this.interrupts,
+    this.joypad,
+    this.serial,
+    this.apu,
+  );
 
-  private readonly cpu = new CPU(this.bus, this.interrupts, (cycles) => {
-    this.timer.tick(cycles);
-  });
+  private readonly cpu = new CPU(
+    this.bus,
+    this.interrupts,
+    (cycles) => {
+      this.tickTimerEarly(cycles);
+    },
+    (cycles) => {
+      this.tickNonTimerSubsystemsEarly(cycles);
+    },
+  );
 
   private cartridge: Cartridge | null = null;
 
@@ -108,7 +123,12 @@ export class GameBoy {
 
     const cycles = this.cpu.step();
     const earlyTimerCycles = this.cpu.consumeTimerEarlyTickCycles();
-    this.tickSubsystems(cycles, cycles - earlyTimerCycles);
+    const earlyNonTimerCycles = this.cpu.consumeNonTimerEarlyTickCycles();
+    this.tickSubsystems(
+      cycles,
+      Math.max(0, cycles - earlyTimerCycles),
+      Math.max(0, cycles - earlyNonTimerCycles),
+    );
     return cycles;
   }
 
@@ -123,7 +143,12 @@ export class GameBoy {
       const cycles = this.cpu.step();
       consumed += cycles;
       const earlyTimerCycles = this.cpu.consumeTimerEarlyTickCycles();
-      emitted = this.tickSubsystems(cycles, cycles - earlyTimerCycles);
+      const earlyNonTimerCycles = this.cpu.consumeNonTimerEarlyTickCycles();
+      emitted = this.tickSubsystems(
+        cycles,
+        Math.max(0, cycles - earlyTimerCycles),
+        Math.max(0, cycles - earlyNonTimerCycles),
+      );
     }
 
     if (!emitted) {
@@ -141,7 +166,12 @@ export class GameBoy {
       const elapsed = this.cpu.step();
       remaining -= elapsed;
       const earlyTimerCycles = this.cpu.consumeTimerEarlyTickCycles();
-      this.tickSubsystems(elapsed, elapsed - earlyTimerCycles);
+      const earlyNonTimerCycles = this.cpu.consumeNonTimerEarlyTickCycles();
+      this.tickSubsystems(
+        elapsed,
+        Math.max(0, elapsed - earlyTimerCycles),
+        Math.max(0, elapsed - earlyNonTimerCycles),
+      );
     }
   }
 
@@ -240,14 +270,33 @@ export class GameBoy {
     return this.bus.read8(address & 0xffff);
   }
 
-  private tickSubsystems(cycles: number, timerCycles = cycles): boolean {
+  public getCompatFlags(): {
+    dmaActive: boolean;
+    timerReloadPending: boolean;
+    lcdEnabled: boolean;
+  } {
+    return {
+      dmaActive: this.bus.isDmaActive(),
+      timerReloadPending: this.timer.isReloadPending(),
+      lcdEnabled: (this.ppu.getLCDC() & 0x80) !== 0,
+    };
+  }
+
+  private tickSubsystems(cycles: number, timerCycles = cycles, nonTimerCycles = cycles): boolean {
+    if (cycles <= 0 && timerCycles <= 0 && nonTimerCycles <= 0) {
+      return false;
+    }
+
+    if (nonTimerCycles > 0) {
+      this.bus.tick(nonTimerCycles);
+      this.ppu.tick(nonTimerCycles);
+      this.serial.tick(nonTimerCycles);
+      this.apu.tick(nonTimerCycles);
+    }
+
     if (timerCycles > 0) {
       this.timer.tick(timerCycles);
     }
-
-    this.ppu.tick(cycles);
-    this.serial.tick(cycles);
-    this.apu.tick(cycles);
 
     if (this.ppu.consumeFrameReady()) {
       this.emitFrame();
@@ -255,6 +304,29 @@ export class GameBoy {
     }
 
     return false;
+  }
+
+  private tickTimerEarly(cycles: number): void {
+    if (cycles <= 0) {
+      return;
+    }
+
+    this.timer.tick(cycles);
+  }
+
+  private tickNonTimerSubsystemsEarly(cycles: number): void {
+    if (cycles <= 0) {
+      return;
+    }
+
+    this.bus.tick(cycles);
+    this.ppu.tick(cycles);
+    this.serial.tick(cycles);
+    this.apu.tick(cycles);
+
+    if (this.ppu.consumeFrameReady()) {
+      this.emitFrame();
+    }
   }
 
   private emitFrame(): void {

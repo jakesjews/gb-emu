@@ -49,22 +49,44 @@ export class InterruptController {
   }
 
   public hasPending(): boolean {
-    return (this.ie & this.if & 0x1f) !== 0;
+    return this.getPendingMask() !== 0;
   }
 
-  public consumeNextPendingVector(): number | null {
-    const pending = this.ie & this.if & 0x1f;
-    if (pending === 0) {
-      return null;
+  public getPendingMask(): number {
+    return this.ie & this.if & 0x1f;
+  }
+
+  public getHighestPriorityPendingMask(mask = this.getPendingMask()): number {
+    for (const candidate of INTERRUPT_VECTORS) {
+      if ((mask & candidate.mask) !== 0) {
+        return candidate.mask;
+      }
     }
 
+    return 0;
+  }
+
+  public getVectorForMask(mask: number): number | null {
     for (const candidate of INTERRUPT_VECTORS) {
-      if ((pending & candidate.mask) !== 0) {
-        this.clear(candidate.mask as InterruptFlag);
+      if ((mask & candidate.mask) !== 0) {
         return candidate.vector;
       }
     }
 
     return null;
+  }
+
+  public consumePendingByMask(mask: number): number | null {
+    const highest = this.getHighestPriorityPendingMask(mask);
+    if (highest === 0) {
+      return null;
+    }
+
+    this.clear(highest as InterruptFlag);
+    return this.getVectorForMask(highest);
+  }
+
+  public consumeNextPendingVector(): number | null {
+    return this.consumePendingByMask(this.getPendingMask());
   }
 }

@@ -16,6 +16,8 @@ describe('Timer', () => {
     expect(timer.readTIMA()).toBe(0xff);
 
     timer.tick(16);
+    expect(timer.readTIMA()).toBe(0x00);
+    timer.tick(4);
     expect(timer.readTIMA()).toBe(0x77);
     expect((interrupts.readIF() & InterruptFlag.Timer) !== 0).toBe(true);
   });

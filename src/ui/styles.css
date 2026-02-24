@@ -122,8 +122,7 @@ body {
   place-items: center;
   background:
     linear-gradient(145deg, rgba(215, 109, 43, 0.16), transparent 45%),
-    linear-gradient(315deg, rgba(43, 122, 83, 0.16), transparent 40%),
-    var(--panel);
+    linear-gradient(315deg, rgba(43, 122, 83, 0.16), transparent 40%), var(--panel);
 }
 
 .gb-screen {
