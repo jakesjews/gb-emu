@@ -40,8 +40,27 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Unit + compatibility tests
-        run: npm run test
+      - name: Unit tests
+        run: npm run test:unit
+
+      - name: Compatibility tests (strict gate)
+        run: npm run test:compat
+
+      - name: Compatibility tests (tier3b shadow)
+        continue-on-error: true
+        run: GB_COMPAT_STRICT=0 npm run test:compat:tier3b
+
+      - name: Compatibility summary
+        if: always()
+        run: npm run test:compat:report
+
+      - name: Upload compatibility artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compat-artifacts
+          path: test-results/compat/
+          if-no-files-found: ignore
 
   e2e:
     name: E2E Smoke

@@ -113,7 +113,7 @@ export class Bus {
     const addr = address & 0xffff;
 
     if (this.isCpuDmaBlockedAddress(addr) && addr !== 0xff46) {
-      return 0xff;
+      return this.readCpuDmaBlockedValue(addr);
     }
 
     if (addr <= 0x7fff) {
@@ -336,11 +336,37 @@ export class Bus {
       return false;
     }
 
-    return !this.isHramAddress(address);
+    if (this.isHramAddress(address)) {
+      return false;
+    }
+
+    if (this.isOamAddress(address)) {
+      return true;
+    }
+
+    // When DMA source is VRAM, external/WRAM bus stays accessible.
+    if (this.isDmaSourceInVram()) {
+      return this.isVramAddress(address);
+    }
+
+    // Non-VRAM DMA sources occupy the external bus and block non-HRAM accesses.
+    return true;
   }
 
   private isHramAddress(address: number): boolean {
     return address >= 0xff80 && address <= 0xfffe;
+  }
+
+  private isVramAddress(address: number): boolean {
+    return address >= 0x8000 && address <= 0x9fff;
+  }
+
+  private isOamAddress(address: number): boolean {
+    return address >= 0xfe00 && address <= 0xfe9f;
+  }
+
+  private isDmaSourceInVram(): boolean {
+    return this.dmaSourceBase >= 0x8000 && this.dmaSourceBase <= 0x9fff;
   }
 
   private readDmaSourceByte(address: number): number {
@@ -371,5 +397,18 @@ export class Bus {
     }
 
     return 0xff;
+  }
+
+  private readCpuDmaBlockedValue(address: number): number {
+    if (!this.dmaActive) {
+      return 0xff;
+    }
+
+    if (this.isOamAddress(address)) {
+      return 0xff;
+    }
+
+    const sourceAddress = (this.dmaSourceBase + this.dmaByteIndex) & 0xffff;
+    return this.readDmaSourceByte(sourceAddress);
   }
 }

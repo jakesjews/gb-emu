@@ -1,11 +1,21 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { GameBoy } from '../../src/core/system/GameBoy';
 import { createCompatResult, toArrayBuffer, type CompatResult } from './compatTypes';
+import {
+  buildCompatSuiteReport,
+  createCaseReportFromResult,
+  createSkippedCaseReport,
+  findMissingRoms,
+  formatMissingRomMessage,
+  type CompatCaseReport,
+  writeCompatSuiteReport,
+} from './reportSink';
 
 const ROM_DIR = process.env.GB_TEST_ROM_DIR ?? path.resolve(process.cwd(), 'tests/roms/blargg');
+const STRICT_COMPAT = process.env.GB_COMPAT_STRICT !== '0';
 
 const HALT_BUG_PASS_HASH = '3d368e327bea655aa0732f445b2ad8b17f0a50fa';
 
@@ -95,25 +105,61 @@ async function runHaltBugRom(
 }
 
 describe('blargg compatibility subset', () => {
+  const startedAt = new Date().toISOString();
+  const reportCases: CompatCaseReport[] = [];
+  const missingRoms = findMissingRoms(
+    ROM_DIR,
+    COMPAT_CASES.map((testCase) => testCase.romName),
+    existsSync,
+  );
+  const missingSet = new Set(missingRoms.map((entry) => entry.name));
+  for (const missing of missingRoms) {
+    reportCases.push(
+      createSkippedCaseReport(missing.name, `Missing required ROM asset: ${missing.absolutePath}`),
+    );
+  }
+
+  it('preflight: required ROM assets are present', () => {
+    if (STRICT_COMPAT && missingRoms.length > 0) {
+      throw new Error(formatMissingRomMessage('blargg subset', STRICT_COMPAT, missingRoms));
+    }
+  });
+
   for (const testCase of COMPAT_CASES) {
     const romPath = path.join(ROM_DIR, testCase.romName);
-    const run = existsSync(romPath) ? it : it.skip;
+    const run = missingSet.has(testCase.romName) ? it.skip : it;
 
     run(
       testCase.romName,
       async () => {
         if (testCase.kind === 'serial') {
           const result = await runSerialRom(romPath, testCase.maxCycles);
+          reportCases.push(createCaseReportFromResult(result));
           const detail = `${result.name} status=${result.status} cycles=${result.cycles} pc=0x${result.pc.toString(16)} op=0x${result.opcode.toString(16)} bc=0x${result.bc.toString(16)} de=0x${result.de.toString(16)} hl=0x${result.hl.toString(16)} serialTail=${JSON.stringify(result.serialTail)}`;
           expect(result.status, detail).toBe('pass');
           return;
         }
 
         const result = await runHaltBugRom(romPath, testCase.settleCycles, testCase.verifyCycles);
+        reportCases.push(createCaseReportFromResult(result.result));
         const detail = `${result.summary} status=${result.result.status} cycles=${result.result.cycles} pc=0x${result.result.pc.toString(16)} op=0x${result.result.opcode.toString(16)} bc=0x${result.result.bc.toString(16)} de=0x${result.result.de.toString(16)} hl=0x${result.result.hl.toString(16)} serialTail=${JSON.stringify(result.result.serialTail)}`;
         expect(result.result.status, detail).toBe('pass');
       },
       60_000,
     );
   }
+
+  afterAll(() => {
+    writeCompatSuiteReport(
+      'blargg.json',
+      buildCompatSuiteReport({
+        suite: 'blargg',
+        tier: 'tier1',
+        strict: STRICT_COMPAT,
+        startedAt,
+        finishedAt: new Date().toISOString(),
+        cases: reportCases,
+      }),
+    );
+  });
 });

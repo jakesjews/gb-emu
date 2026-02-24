@@ -20,6 +20,19 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   return copy.buffer;
 }
 
+function runUntilHalt(gb: GameBoy, maxSteps = 4096): number {
+  let steps = 0;
+  while (steps < maxSteps) {
+    gb.stepInstruction();
+    steps += 1;
+    if (gb.getDebugSnapshot().halted) {
+      return steps;
+    }
+  }
+
+  return steps;
+}
+
 describe('CPU arithmetic and control flow', () => {
   it('does not advance without a loaded ROM', () => {
     const gb = new GameBoy();
@@ -178,5 +191,91 @@ describe('CPU arithmetic and control flow', () => {
 
     const snapshot = gb.getDebugSnapshot();
     expect(snapshot.pc).toBe(0x0040);
+  });
+
+  it('executes WRAM instructions while VRAM-source DMA is active', async () => {
+    const gb = new GameBoy();
+    const rom = buildRom([
+      0x3e,
+      0x3e, // LD A,0x3E
+      0xea,
+      0x00,
+      0xc0, // LD (0xC000),A
+      0x3e,
+      0x42, // LD A,0x42
+      0xea,
+      0x01,
+      0xc0, // LD (0xC001),A
+      0x3e,
+      0x76, // LD A,0x76
+      0xea,
+      0x02,
+      0xc0, // LD (0xC002),A
+      0x3e,
+      0x80, // LD A,0x80
+      0xe0,
+      0x46, // LDH (0xFF46),A ; start DMA from VRAM
+      0xc3,
+      0x00,
+      0xc0, // JP 0xC000
+      0x76, // HALT (fallback)
+    ]);
+
+    await gb.loadRom(toArrayBuffer(rom));
+    runUntilHalt(gb);
+
+    const snapshot = gb.getDebugSnapshot();
+    expect(snapshot.halted).toBe(true);
+    expect(snapshot.af >> 8).toBe(0x42);
+  });
+
+  it('returns 0xFF for OAM reads during active DMA', async () => {
+    const gb = new GameBoy();
+    const rom = buildRom([
+      0x3e,
+      0x00, // LD A,0x00
+      0xe0,
+      0x40, // LDH (0xFF40),A ; LCD off for deterministic OAM write
+      0x3e,
+      0x12, // LD A,0x12
+      0xea,
+      0x00,
+      0xfe, // LD (0xFE00),A
+      0x3e,
+      0xfa, // LD A,0xFA
+      0xea,
+      0x00,
+      0xc0, // LD (0xC000),A ; LD A,(a16)
+      0x3e,
+      0x00, // LD A,0x00
+      0xea,
+      0x01,
+      0xc0, // LD (0xC001),A
+      0x3e,
+      0xfe, // LD A,0xFE
+      0xea,
+      0x02,
+      0xc0, // LD (0xC002),A
+      0x3e,
+      0x76, // LD A,0x76
+      0xea,
+      0x03,
+      0xc0, // LD (0xC003),A ; HALT
+      0x3e,
+      0x80, // LD A,0x80
+      0xe0,
+      0x46, // LDH (0xFF46),A ; start DMA
+      0xc3,
+      0x00,
+      0xc0, // JP 0xC000
+      0x76, // HALT (fallback)
+    ]);
+
+    await gb.loadRom(toArrayBuffer(rom));
+    runUntilHalt(gb);
+
+    const snapshot = gb.getDebugSnapshot();
+    expect(snapshot.halted).toBe(true);
+    expect(snapshot.af >> 8).toBe(0xff);
   });
 });

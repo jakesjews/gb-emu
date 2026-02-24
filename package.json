@@ -11,9 +11,15 @@
     "preview": "vite preview",
     "test": "npm run test:unit && npm run test:compat",
     "test:unit": "vitest run tests/unit",
-    "test:compat": "npm run test:compat:tier1 && npm run test:compat:tier2",
-    "test:compat:tier1": "vitest run tests/compat/blargg.compat.test.ts tests/compat/mooneye.compat.test.ts --testNamePattern \"blargg compatibility subset|mooneye DMG tier-1 compatibility\"",
-    "test:compat:tier2": "vitest run tests/compat/mooneye.compat.test.ts --testNamePattern \"mooneye DMG tier-2 compatibility\"",
+    "test:compat:clean": "rm -rf test-results/compat",
+    "test:compat": "npm run test:compat:clean && npm run test:compat:tier1 && npm run test:compat:tier2 && npm run test:compat:tier3a",
+    "test:compat:soft": "npm run test:compat:clean && GB_COMPAT_STRICT=0 npm run test:compat:tier1 && GB_COMPAT_STRICT=0 npm run test:compat:tier2 && GB_COMPAT_STRICT=0 npm run test:compat:tier3a",
+    "test:compat:tier1": "GB_COMPAT_TIER=tier1 vitest run tests/compat/blargg.compat.test.ts tests/compat/mooneye.compat.test.ts",
+    "test:compat:tier2": "GB_COMPAT_TIER=tier2 vitest run tests/compat/mooneye.compat.test.ts",
+    "test:compat:tier3a": "GB_COMPAT_TIER=tier3a vitest run tests/compat/mooneye.compat.test.ts",
+    "test:compat:tier3b": "GB_COMPAT_TIER=tier3b vitest run tests/compat/mooneye.compat.test.ts",
+    "test:compat:extended": "npm run test:compat && GB_COMPAT_STRICT=0 npm run test:compat:tier3b",
+    "test:compat:report": "node scripts/compat_report.mjs",
     "test:e2e": "playwright test"
   },
   "devDependencies": {

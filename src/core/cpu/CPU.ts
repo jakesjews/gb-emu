@@ -102,6 +102,8 @@ export class CPU {
     }
 
     const opcode = this.fetch8();
+    // Account for opcode fetch machine cycle before executing per-opcode phases.
+    this.tickInstructionEarly(4);
     this.lastOpcode = opcode;
     const elapsed = this.executeOpcode(opcode);
     this.cycles += elapsed;
@@ -222,16 +224,28 @@ export class CPU {
     }
   }
 
-  private push16(value: number): void {
+  // Instruction-timed push used by opcode execution paths.
+  private push16Instruction(value: number, initialDelayCycles: number): void {
+    if (initialDelayCycles > 0) {
+      this.tickInstructionEarly(initialDelayCycles);
+    }
+    this.tickInstructionEarly(4);
     this.registers.sp = (this.registers.sp - 1) & 0xffff;
     this.bus.write8(this.registers.sp, (value >> 8) & 0xff);
+    this.tickInstructionEarly(4);
     this.registers.sp = (this.registers.sp - 1) & 0xffff;
     this.bus.write8(this.registers.sp, value & 0xff);
   }
 
-  private pop16(): number {
+  // Instruction-timed pop used by opcode execution paths.
+  private pop16Instruction(initialDelayCycles: number): number {
+    if (initialDelayCycles > 0) {
+      this.tickInstructionEarly(initialDelayCycles);
+    }
+    this.tickInstructionEarly(4);
     const lo = this.bus.read8(this.registers.sp);
     this.registers.sp = (this.registers.sp + 1) & 0xffff;
+    this.tickInstructionEarly(4);
     const hi = this.bus.read8(this.registers.sp);
     this.registers.sp = (this.registers.sp + 1) & 0xffff;
     return lo | (hi << 8);
@@ -531,7 +545,7 @@ export class CPU {
       case 0xc0:
         return this.retCondition(!this.registers.getFlag(FLAG_Z));
       case 0xc1:
-        this.registers.bc = this.pop16();
+        this.registers.bc = this.pop16Instruction(0);
         return 12;
       case 0xc2:
         return this.jpCondition(!this.registers.getFlag(FLAG_Z));
@@ -541,7 +555,7 @@ export class CPU {
       case 0xc4:
         return this.callCondition(!this.registers.getFlag(FLAG_Z));
       case 0xc5:
-        this.push16(this.registers.bc);
+        this.push16Instruction(this.registers.bc, 4);
         return 16;
       case 0xc6:
         this.addA(this.fetch8());
@@ -552,7 +566,8 @@ export class CPU {
       case 0xc8:
         return this.retCondition(this.registers.getFlag(FLAG_Z));
       case 0xc9:
-        this.registers.pc = this.pop16();
+        this.registers.pc = this.pop16Instruction(0);
+        this.tickInstructionEarly(4);
         return 16;
       case 0xca:
         return this.jpCondition(this.registers.getFlag(FLAG_Z));
@@ -561,8 +576,10 @@ export class CPU {
       case 0xcc:
         return this.callCondition(this.registers.getFlag(FLAG_Z));
       case 0xcd: {
-        const addr = this.fetch16();
-        this.push16(this.registers.pc);
+        const lo = this.fetch8InstructionTimed();
+        const hi = this.fetch8InstructionTimed();
+        const addr = lo | (hi << 8);
+        this.push16Instruction(this.registers.pc, 4);
         this.registers.pc = addr;
         return 24;
       }
@@ -576,7 +593,7 @@ export class CPU {
       case 0xd0:
         return this.retCondition(!this.registers.getFlag(FLAG_C));
       case 0xd1:
-        this.registers.de = this.pop16();
+        this.registers.de = this.pop16Instruction(0);
         return 12;
       case 0xd2:
         return this.jpCondition(!this.registers.getFlag(FLAG_C));
@@ -585,7 +602,7 @@ export class CPU {
       case 0xd4:
         return this.callCondition(!this.registers.getFlag(FLAG_C));
       case 0xd5:
-        this.push16(this.registers.de);
+        this.push16Instruction(this.registers.de, 4);
         return 16;
       case 0xd6:
         this.subA(this.fetch8());
@@ -596,7 +613,8 @@ export class CPU {
       case 0xd8:
         return this.retCondition(this.registers.getFlag(FLAG_C));
       case 0xd9:
-        this.registers.pc = this.pop16();
+        this.registers.pc = this.pop16Instruction(0);
+        this.tickInstructionEarly(4);
         this.ime = true;
         this.imeEnableDelay = 0;
         return 16;
@@ -624,7 +642,7 @@ export class CPU {
         }
         return 12;
       case 0xe1:
-        this.registers.hl = this.pop16();
+        this.registers.hl = this.pop16Instruction(0);
         return 12;
       case 0xe2:
         this.tickNonTimerEarly(4);
@@ -634,7 +652,7 @@ export class CPU {
       case 0xe4:
         return 4;
       case 0xe5:
-        this.push16(this.registers.hl);
+        this.push16Instruction(this.registers.hl, 4);
         return 16;
       case 0xe6:
         this.andA(this.fetch8());
@@ -643,7 +661,8 @@ export class CPU {
         this.rst(0x20);
         return 16;
       case 0xe8:
-        this.addSpSigned(this.fetch8());
+        this.addSpSigned(this.fetch8InstructionTimed());
+        this.tickInstructionEarly(8);
         return 16;
       case 0xe9:
         this.registers.pc = this.registers.hl;
@@ -676,7 +695,7 @@ export class CPU {
         }
         return 12;
       case 0xf1:
-        this.registers.af = this.pop16();
+        this.registers.af = this.pop16Instruction(0);
         return 12;
       case 0xf2:
         this.tickNonTimerEarly(4);
@@ -689,7 +708,7 @@ export class CPU {
       case 0xf4:
         return 4;
       case 0xf5:
-        this.push16(this.registers.af);
+        this.push16Instruction(this.registers.af, 4);
         return 16;
       case 0xf6:
         this.orA(this.fetch8());
@@ -698,7 +717,8 @@ export class CPU {
         this.rst(0x30);
         return 16;
       case 0xf8:
-        this.ldHlSpSigned(this.fetch8());
+        this.ldHlSpSigned(this.fetch8InstructionTimed());
+        this.tickInstructionEarly(4);
         return 12;
       case 0xf9:
         this.registers.sp = this.registers.hl;
@@ -1013,9 +1033,11 @@ export class CPU {
   }
 
   private callCondition(condition: boolean): number {
-    const address = this.fetch16();
+    const lo = this.fetch8InstructionTimed();
+    const hi = this.fetch8InstructionTimed();
+    const address = lo | (hi << 8);
     if (condition) {
-      this.push16(this.registers.pc);
+      this.push16Instruction(this.registers.pc, 4);
       this.registers.pc = address;
       return 24;
     }
@@ -1025,7 +1047,8 @@ export class CPU {
 
   private retCondition(condition: boolean): number {
     if (condition) {
-      this.registers.pc = this.pop16();
+      this.registers.pc = this.pop16Instruction(4);
+      this.tickInstructionEarly(4);
       return 20;
     }
 
@@ -1033,7 +1056,7 @@ export class CPU {
   }
 
   private rst(vector: number): void {
-    this.push16(this.registers.pc);
+    this.push16Instruction(this.registers.pc, 4);
     this.registers.pc = vector & 0xff;
   }
 
@@ -1079,5 +1102,15 @@ export class CPU {
 
     this.nonTimerEarlyTickCycles += cycles;
     this.nonTimerTickHook?.(cycles);
+  }
+
+  private tickInstructionEarly(cycles: number): void {
+    this.tickTimerEarly(cycles);
+    this.tickNonTimerEarly(cycles);
+  }
+
+  private fetch8InstructionTimed(): number {
+    this.tickInstructionEarly(4);
+    return this.fetch8();
   }
 }
