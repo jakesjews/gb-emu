@@ -179,3 +179,53 @@ Original prompt: Implement a browser gameboy emulator that can load and play rom
 - Tier-3B shadow run streak (mainline promotion tracker):
   - current: 1/3 green runs (local baseline for this milestone)
   - promotion trigger unchanged: 3 consecutive green Tier-3B shadow runs on `main`.
+- Mapper expansion milestone (MBC3 basic RTC v1 + MBC5) completed:
+  - baseline preserved: strict required gate `tier1 + tier2 + tier3a` remains green with zero regressions.
+  - cartridge parser/types expanded in `header.ts` for MBC3 family (`0x0F-0x13`) and MBC5 family (`0x19-0x1E`).
+  - new mapper implementations:
+    - `src/core/cartridge/mbc/MBC3.ts` with ROM/RAM banking, RTC register select/latch/halt/day-carry, and metadata import/export.
+    - `src/core/cartridge/mbc/MBC5.ts` with 9-bit ROM banking, RAM banking/gating, rumble-side-effect no-op behavior.
+  - mapper plumbing integrated in `Cartridge.ts`, and non-breaking metadata access added through `GameBoy.ts`.
+- Save persistence upgraded to versioned payloads:
+  - `SaveManager` now reads legacy v1 base64 SRAM entries and writes v2 JSON (`version`, `ram_b64`, `mapper_meta`).
+  - `App.ts` load/reset/flush flows now import/export mapper metadata when present.
+  - added `tests/unit/saveManager.test.ts` for v1 backward compatibility and v2 round-trip coverage.
+- Compatibility harness and assets expanded:
+  - `scripts/fetch_test_roms.sh` now fetches mapper ROM assets to `tests/roms/mapper`:
+    - `MBC3_Test.gbc` (ZoomTen/mbc30test v1.1)
+    - `rtc3test.gb` (aaaaaa123456789/rtc3test v004)
+    - optional `mbctest.gb` (EricKirschenmann/MBC3-Tester-gb v1.0)
+  - added `tests/compat/mapper.compat.test.ts` with:
+    - MBC5 mooneye emulator-only oracle matrix,
+    - MBC3 deterministic smoke for `MBC3_Test.gbc`,
+    - informational shadow runs for `rtc3test.gb` and optional `mbctest.gb`.
+  - package scripts added:
+    - `test:compat:mapper:shadow`
+    - `test:compat:mapper:strict`
+- Tier3B and DMA alignment updates:
+  - moved `acceptance/oam_dma/sources-GS.gb` into executed Tier-3B matrix (`tests/compat/mooneye.compat.test.ts`).
+  - fixed DMG DMA source quirk in `Bus.ts`: DMA source addresses `FE00-FFFF` mirror to `DE00-DFFF`.
+  - added regression unit coverage in `tests/unit/bus.test.ts` for FE/FF DMA source mirroring.
+- CI/report integration updates:
+  - `.github/workflows/ci.yml` now runs mapper shadow compat step (`continue-on-error: true`).
+  - `scripts/compat_report.mjs` now includes mapper shadow report artifacts as informational rows.
+  - new report artifacts emitted:
+    - `mapper-mbc5-shadow.json`
+    - `mapper-mbc3-shadow.json`
+- Validation status after mapper milestone:
+  - `npm run format:check` ✅
+  - `npm run build` ✅
+  - `npm run test:unit` ✅
+  - `npm run test:compat` ✅ (strict `tier1+tier2+tier3a`)
+  - `GB_COMPAT_STRICT=0 npm run test:compat:tier3b` ✅ (includes `acceptance/oam_dma/sources-GS.gb`)
+  - `npm run test:compat:mapper:shadow` ✅
+  - `npm run test:compat:mapper:strict` ✅
+  - `npm run test:compat:report` ✅
+  - `npm run test:e2e` ✅
+- Shadow run streak tracker (promotion readiness):
+  - Tier-3B shadow: 1/3 green runs on `main` (promotion trigger unchanged).
+  - Mapper shadow: 1/3 green runs on `main` (new tracker started this milestone).
+- Browser loop sanity via develop-web-game Playwright client:
+  - ran `web_game_playwright_client.js` against `http://127.0.0.1:5173` with action payloads,
+  - inspected `output/web-game/shot-1.png` and `output/web-game/state-1.json`,
+  - no new console/page errors observed from the client run.

@@ -4,12 +4,17 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BLARGG_DIR="$ROOT_DIR/tests/roms/blargg"
 MOONEYE_DIR="$ROOT_DIR/tests/roms/mooneye"
+MAPPER_DIR="$ROOT_DIR/tests/roms/mapper"
 mkdir -p "$BLARGG_DIR"
 mkdir -p "$MOONEYE_DIR"
+mkdir -p "$MAPPER_DIR"
 
 BASE_URL="https://raw.githubusercontent.com/retrio/gb-test-roms/master"
 MOONEYE_BASE_URL="https://gekkio.fi/files/mooneye-test-suite/mts-20240926-1737-443f6e1"
 MOONEYE_ARCHIVE="mts-20240926-1737-443f6e1.tar.xz"
+MBC3_TEST_URL="https://github.com/ZoomTen/mbc30test/releases/download/v1.1/MBC3_Test.gbc"
+RTC3_TEST_URL="https://github.com/aaaaaa123456789/rtc3test/releases/download/v004/rtc3test.gb"
+MBC3_OPTIONAL_TEST_URL="https://github.com/EricKirschenmann/MBC3-Tester-gb/releases/download/v1.0/mbctest.gb"
 
 fetch() {
   local remote_path="$1"
@@ -35,3 +40,15 @@ mkdir -p "$MOONEYE_DIR"
 tar -xJf "$TMP_ARCHIVE" --strip-components=1 -C "$MOONEYE_DIR"
 
 echo "Mooneye bundle extracted to $MOONEYE_DIR"
+
+echo "Fetching mapper compatibility ROMs"
+curl -fsSL "$MBC3_TEST_URL" -o "$MAPPER_DIR/MBC3_Test.gbc"
+curl -fsSL "$RTC3_TEST_URL" -o "$MAPPER_DIR/rtc3test.gb"
+if curl -fsSL "$MBC3_OPTIONAL_TEST_URL" -o "$MAPPER_DIR/mbctest.gb"; then
+  echo "Fetched optional mapper ROM: mbctest.gb"
+else
+  echo "Warning: optional mapper ROM mbctest.gb could not be downloaded." >&2
+  rm -f "$MAPPER_DIR/mbctest.gb"
+fi
+
+echo "Mapper ROMs downloaded to $MAPPER_DIR"

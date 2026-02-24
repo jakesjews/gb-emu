@@ -1,6 +1,8 @@
 import type { CartridgeInfo } from '../../types/emulator';
 import { parseHeader } from './header';
 import { MBC1Mapper } from './mbc/MBC1';
+import { MBC3Mapper } from './mbc/MBC3';
+import { MBC5Mapper } from './mbc/MBC5';
 import { RomOnlyMapper } from './mbc/RomOnly';
 
 export interface Mapper {
@@ -12,6 +14,8 @@ export interface Mapper {
   getRam(): Uint8Array | null;
   loadRam(data: Uint8Array): void;
   clearDirtyFlag(): void;
+  exportMetadata?(): unknown;
+  importMetadata?(metadata: unknown): void;
 }
 
 export class Cartridge {
@@ -41,6 +45,21 @@ export class Cartridge {
       case 0x02:
       case 0x03:
         this.mapper = new MBC1Mapper(this.romBytes, parsed.ramSize);
+        break;
+      case 0x0f:
+      case 0x10:
+      case 0x11:
+      case 0x12:
+      case 0x13:
+        this.mapper = new MBC3Mapper(this.romBytes, parsed.ramSize);
+        break;
+      case 0x19:
+      case 0x1a:
+      case 0x1b:
+      case 0x1c:
+      case 0x1d:
+      case 0x1e:
+        this.mapper = new MBC5Mapper(this.romBytes, parsed.ramSize);
         break;
       default:
         throw new Error(`Unsupported cartridge type ${parsed.type}.`);
@@ -82,6 +101,14 @@ export class Cartridge {
 
   public importRam(data: Uint8Array): void {
     this.mapper.loadRam(data);
+  }
+
+  public exportMapperMetadata(): unknown {
+    return this.mapper.exportMetadata?.() ?? null;
+  }
+
+  public importMapperMetadata(metadata: unknown): void {
+    this.mapper.importMetadata?.(metadata);
   }
 
   public getRomBytes(): Uint8Array {

@@ -65,4 +65,18 @@ describe('Bus DMA timing edges', () => {
     bus.tick(4);
     expect(bus.read8(0xc000)).toBe(0x77);
   });
+
+  it('mirrors FE00-FFFF DMA sources to DE00-DFFF on DMG', () => {
+    const { bus, mmu } = createBus(0x00);
+    mmu.wram[0x1e00] = 0x12; // DE00
+    mmu.wram[0x1f00] = 0x34; // DF00
+
+    bus.write8(0xff46, 0xfe);
+    bus.tick(12 + 4 * 160);
+    expect(bus.read8(0xfe00)).toBe(0x12);
+
+    bus.write8(0xff46, 0xff);
+    bus.tick(12 + 4 * 160);
+    expect(bus.read8(0xfe00)).toBe(0x34);
+  });
 });

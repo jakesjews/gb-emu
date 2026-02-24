@@ -227,6 +227,14 @@ export class GameBoy {
     this.cartridge?.importRam(data);
   }
 
+  public exportSaveMetadata(): unknown {
+    return this.cartridge?.exportMapperMetadata() ?? null;
+  }
+
+  public importSaveMetadata(metadata: unknown): void {
+    this.cartridge?.importMapperMetadata(metadata);
+  }
+
   public isSaveRamDirty(): boolean {
     return this.cartridge?.isRamDirty() ?? false;
   }

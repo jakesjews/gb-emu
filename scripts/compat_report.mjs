@@ -13,6 +13,7 @@ const REQUIRED_REPORTS = [
   'mooneye-tier3a.json',
 ];
 const OPTIONAL_REPORTS = ['mooneye-tier3b.json'];
+const OPTIONAL_MAPPER_REPORTS = ['mapper-mbc5-shadow.json', 'mapper-mbc3-shadow.json'];
 
 function readJson(fileName) {
   const filePath = path.join(REPORT_DIR, fileName);
@@ -32,6 +33,7 @@ function buildSummary(reports, strictFailures) {
     `- Generated at: ${generatedAt}`,
     `- Strict mode: ${STRICT_COMPAT ? 'enabled' : 'disabled'}`,
     '- Tier-3B (`mooneye-tier3b`) is informational shadow coverage until promotion.',
+    '- Mapper shadow suites (`mapper-mbc5-shadow`, `mapper-mbc3-shadow`) are informational until promotion.',
     '',
     '| Suite | Tier | Strict | Total | Pass | Fail | Timeout | Skipped |',
     '| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |',
@@ -101,9 +103,9 @@ function collectStrictFailures(reports) {
 function main() {
   mkdirSync(REPORT_DIR, { recursive: true });
   const requiredReports = REQUIRED_REPORTS.map(readJson);
-  const optionalReports = OPTIONAL_REPORTS.filter((fileName) =>
-    existsSync(path.join(REPORT_DIR, fileName)),
-  ).map(readJson);
+  const optionalReports = [...OPTIONAL_REPORTS, ...OPTIONAL_MAPPER_REPORTS]
+    .filter((fileName) => existsSync(path.join(REPORT_DIR, fileName)))
+    .map(readJson);
   const reports = [...requiredReports, ...optionalReports];
   const strictFailures = collectStrictFailures(requiredReports);
   const summary = buildSummary(reports, strictFailures);

@@ -50,6 +50,10 @@ jobs:
         continue-on-error: true
         run: GB_COMPAT_STRICT=0 npm run test:compat:tier3b
 
+      - name: Compatibility tests (mapper shadow)
+        continue-on-error: true
+        run: GB_COMPAT_STRICT=0 npm run test:compat:mapper:shadow
+
       - name: Compatibility summary
         if: always()
         run: npm run test:compat:report

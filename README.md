@@ -5,10 +5,10 @@ From-scratch browser Game Boy emulator targeting original DMG behavior.
 ## Features
 
 - DMG hardware target (no CGB features in v1)
-- Cartridge support: ROM-only and MBC1
+- Cartridge support: ROM-only, MBC1, MBC3 (basic RTC v1), and MBC5
 - Local ROM loading (`.gb`)
 - Keyboard + gamepad input
-- Auto SRAM persistence in `localStorage` keyed by ROM SHA-1
+- Auto save persistence in `localStorage` keyed by ROM SHA-1 (SRAM + mapper metadata)
 - Canvas renderer (160x144 internal resolution, pixel scaling)
 - Basic debug pane (registers, flags, interrupt state, serial tail)
 - Deterministic browser hooks:
@@ -40,6 +40,8 @@ npm run test:compat:tier1
 npm run test:compat:tier2
 npm run test:compat:tier3a
 npm run test:compat:tier3b
+npm run test:compat:mapper:shadow
+npm run test:compat:mapper:strict
 npm run test:compat        # strict gate (tier1 + tier2 + tier3a)
 npm run test:compat:soft   # local convenience mode (allows missing ROM assets)
 npm run test:compat:extended # strict required set + shadow tier3b
@@ -55,6 +57,7 @@ CI (GitHub Actions) runs:
 - `npm run test:unit`
 - `npm run test:compat` (strict tier1 + tier2 + tier3a gate with zero allowed skips)
 - `GB_COMPAT_STRICT=0 npm run test:compat:tier3b` (informational shadow coverage)
+- `GB_COMPAT_STRICT=0 npm run test:compat:mapper:shadow` (informational mapper shadow coverage)
 - `npm run test:compat:report` (generates CI-friendly summary)
 - `npm run test:e2e` (deterministic smoke + optional local Tetris smoke that skips without `tests/roms/tetris.gb`)
 
@@ -70,7 +73,7 @@ Fetch compatibility ROMs:
 ./scripts/fetch_test_roms.sh
 ```
 
-The ROMs are downloaded to `tests/roms/blargg` and `tests/roms/mooneye` and are gitignored.
+The ROMs are downloaded to `tests/roms/blargg`, `tests/roms/mooneye`, and `tests/roms/mapper` and are gitignored.
 Compatibility artifacts are emitted to `test-results/compat/`:
 
 - `blargg.json`
@@ -78,11 +81,12 @@ Compatibility artifacts are emitted to `test-results/compat/`:
 - `mooneye-tier2.json`
 - `mooneye-tier3a.json`
 - `mooneye-tier3b.json` (when shadow tier is run)
+- `mapper-mbc5-shadow.json` (when mapper shadow runs)
+- `mapper-mbc3-shadow.json` (when mapper shadow runs)
 - `summary.md`
 
-Tier-3B shadow currently covers 11 DMG-in-scope ROMs.
-`acceptance/oam_dma/sources-GS.gb` is intentionally excluded because it requires MBC5 (`0x1B`), which is out of current cartridge scope.
-Promotion policy: Tier-3B moves into strict required gating after 3 consecutive green shadow runs on `main`.
+Tier-3B and mapper suites are shadow/informational until promotion.
+Promotion policy: shadow suites move into strict required gating after 3 consecutive green shadow runs on `main`.
 
 ## Notes
 

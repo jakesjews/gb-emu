@@ -218,7 +218,12 @@ export class App {
       this.romHash = await this.saveManager.romHash(new Uint8Array(romBuffer));
       const existingSave = this.saveManager.load(this.romHash);
       if (existingSave) {
-        this.gameBoy.importSaveRam(existingSave);
+        if (existingSave.ram) {
+          this.gameBoy.importSaveRam(existingSave.ram);
+        }
+        if (existingSave.mapperMeta !== null) {
+          this.gameBoy.importSaveMetadata(existingSave.mapperMeta);
+        }
         this.status.saveState = 'saved';
       } else {
         this.status.saveState = 'idle';
@@ -264,7 +269,12 @@ export class App {
     if (this.romHash) {
       const existingSave = this.saveManager.load(this.romHash);
       if (existingSave) {
-        this.gameBoy.importSaveRam(existingSave);
+        if (existingSave.ram) {
+          this.gameBoy.importSaveRam(existingSave.ram);
+        }
+        if (existingSave.mapperMeta !== null) {
+          this.gameBoy.importSaveMetadata(existingSave.mapperMeta);
+        }
       }
     }
 
@@ -325,11 +335,12 @@ export class App {
     }
 
     const ram = this.gameBoy.exportSaveRam();
-    if (!ram) {
+    const mapperMeta = this.gameBoy.exportSaveMetadata();
+    if (!ram && mapperMeta === null) {
       return;
     }
 
-    const success = this.saveManager.save(this.romHash, ram);
+    const success = this.saveManager.save(this.romHash, ram, mapperMeta);
     this.status.saveState = success ? 'saved' : 'error';
     if (success) {
       this.gameBoy.clearSaveRamDirtyFlag();

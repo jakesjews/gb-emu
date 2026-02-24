@@ -18,7 +18,9 @@
     "test:compat:tier2": "GB_COMPAT_TIER=tier2 vitest run tests/compat/mooneye.compat.test.ts",
     "test:compat:tier3a": "GB_COMPAT_TIER=tier3a vitest run tests/compat/mooneye.compat.test.ts",
     "test:compat:tier3b": "GB_COMPAT_TIER=tier3b vitest run tests/compat/mooneye.compat.test.ts",
-    "test:compat:extended": "npm run test:compat && GB_COMPAT_STRICT=0 npm run test:compat:tier3b",
+    "test:compat:mapper:shadow": "GB_COMPAT_STRICT=0 GB_MAPPER_COMPAT_MODE=shadow vitest run tests/compat/mapper.compat.test.ts",
+    "test:compat:mapper:strict": "GB_COMPAT_STRICT=1 GB_MAPPER_COMPAT_MODE=strict vitest run tests/compat/mapper.compat.test.ts",
+    "test:compat:extended": "npm run test:compat && GB_COMPAT_STRICT=0 npm run test:compat:tier3b && npm run test:compat:mapper:shadow",
     "test:compat:report": "node scripts/compat_report.mjs",
     "test:e2e": "playwright test"
   },

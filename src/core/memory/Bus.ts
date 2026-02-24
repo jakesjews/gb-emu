@@ -381,6 +381,11 @@ export class Bus {
   private readDmaSourceByte(address: number): number {
     const addr = address & 0xffff;
 
+    // DMG quirk: DMA sources in FE00-FFFF mirror to DE00-DFFF.
+    if (addr >= 0xfe00) {
+      return this.readDmaSourceByte((addr - 0x2000) & 0xffff);
+    }
+
     if (addr <= 0x7fff) {
       return this.cartridge?.readRom(addr) ?? 0xff;
     }
@@ -399,10 +404,6 @@ export class Bus {
 
     if (addr <= 0xfdff) {
       return this.mmu.wram[addr - 0xe000];
-    }
-
-    if (addr <= 0xfe9f) {
-      return this.ppu.readOAM(addr - 0xfe00);
     }
 
     return 0xff;

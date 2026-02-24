@@ -31,11 +31,6 @@ interface MooneyeCase {
   maxCycles: number;
 }
 
-interface ExcludedMooneyeCase {
-  romName: string;
-  reason: string;
-}
-
 const DEFAULT_MAX_CYCLES = 120_000_000;
 
 const TIER1_CASES: ReadonlyArray<MooneyeCase> = [
@@ -94,17 +89,11 @@ const TIER3B_CASES: ReadonlyArray<MooneyeCase> = [
   { romName: 'acceptance/timer/tim11_div_trigger.gb', maxCycles: DEFAULT_MAX_CYCLES },
   { romName: 'acceptance/oam_dma_start.gb', maxCycles: DEFAULT_MAX_CYCLES },
   { romName: 'acceptance/oam_dma_restart.gb', maxCycles: DEFAULT_MAX_CYCLES },
+  { romName: 'acceptance/oam_dma/sources-GS.gb', maxCycles: DEFAULT_MAX_CYCLES },
   { romName: 'acceptance/ppu/intr_2_0_timing.gb', maxCycles: DEFAULT_MAX_CYCLES },
   { romName: 'acceptance/ppu/intr_2_mode0_timing.gb', maxCycles: DEFAULT_MAX_CYCLES },
   { romName: 'acceptance/ppu/intr_2_mode3_timing.gb', maxCycles: DEFAULT_MAX_CYCLES },
   { romName: 'acceptance/ppu/intr_2_oam_ok_timing.gb', maxCycles: DEFAULT_MAX_CYCLES },
-];
-
-const TIER3B_EXCLUDED_CASES: ReadonlyArray<ExcludedMooneyeCase> = [
-  {
-    romName: 'acceptance/oam_dma/sources-GS.gb',
-    reason: 'Excluded from Tier-3B for now: requires unsupported MBC5 cartridge type (0x1B).',
-  },
 ];
 
 const PASS_REGS = [0x03, 0x05, 0x08, 0x0d, 0x15, 0x22] as const;
@@ -337,7 +326,6 @@ describeTier3A('mooneye DMG tier-3A compatibility', () => {
 describeTier3B('mooneye DMG tier-3B compatibility', () => {
   const startedAt = new Date().toISOString();
   const reportCases: CompatCaseReport[] = [];
-  const excludedNames = new Set(TIER3B_EXCLUDED_CASES.map((entry) => entry.romName));
   const missingRoms = findMissingRoms(
     ROM_DIR,
     TIER3B_CASES.map((testCase) => testCase.romName),
@@ -351,17 +339,6 @@ describeTier3B('mooneye DMG tier-3B compatibility', () => {
   }
 
   it('preflight: required ROM assets are present', () => {
-    const accidentalInclusions = TIER3B_CASES.filter((testCase) =>
-      excludedNames.has(testCase.romName),
-    );
-    if (accidentalInclusions.length > 0) {
-      throw new Error(
-        `mooneye tier-3B: excluded cases were included in required scope: ${accidentalInclusions
-          .map((entry) => entry.romName)
-          .join(', ')}`,
-      );
-    }
-
     if (STRICT_COMPAT && missingRoms.length > 0) {
       throw new Error(formatMissingRomMessage('mooneye tier-3B', STRICT_COMPAT, missingRoms));
     }

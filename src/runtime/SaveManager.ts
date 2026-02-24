@@ -1,4 +1,16 @@
 const KEY_PREFIX = 'gb-emu:sram:';
+const SAVE_VERSION = 2;
+
+interface SavePayloadV2 {
+  version: number;
+  ram_b64: string | null;
+  mapper_meta: unknown;
+}
+
+export interface LoadedSaveData {
+  ram: Uint8Array | null;
+  mapperMeta: unknown;
+}
 
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = '';
@@ -28,25 +40,69 @@ export class SaveManager {
     return [...bytes].map((x) => x.toString(16).padStart(2, '0')).join('');
   }
 
-  public load(hash: string): Uint8Array | null {
+  public load(hash: string): LoadedSaveData | null {
     try {
       const raw = localStorage.getItem(KEY_PREFIX + hash);
       if (!raw) {
         return null;
       }
 
-      return base64ToBytes(raw);
+      const parsed = this.parseSave(raw);
+      if (parsed) {
+        return parsed;
+      }
+
+      // Legacy v1 payload: base64 SRAM only.
+      return {
+        ram: base64ToBytes(raw),
+        mapperMeta: null,
+      };
     } catch {
       return null;
     }
   }
 
-  public save(hash: string, data: Uint8Array): boolean {
+  public save(hash: string, ram: Uint8Array | null, mapperMeta: unknown): boolean {
     try {
-      localStorage.setItem(KEY_PREFIX + hash, bytesToBase64(data));
+      const payload: SavePayloadV2 = {
+        version: SAVE_VERSION,
+        ram_b64: ram ? bytesToBase64(ram) : null,
+        mapper_meta: mapperMeta ?? null,
+      };
+
+      localStorage.setItem(KEY_PREFIX + hash, JSON.stringify(payload));
       return true;
     } catch {
       return false;
     }
+  }
+
+  private parseSave(raw: string): LoadedSaveData | null {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+
+    if (
+      !parsed ||
+      typeof parsed !== 'object' ||
+      !('version' in parsed) ||
+      !('ram_b64' in parsed) ||
+      (parsed as SavePayloadV2).version !== SAVE_VERSION
+    ) {
+      return null;
+    }
+
+    const payload = parsed as SavePayloadV2;
+    if (payload.ram_b64 !== null && typeof payload.ram_b64 !== 'string') {
+      return null;
+    }
+
+    return {
+      ram: payload.ram_b64 ? base64ToBytes(payload.ram_b64) : null,
+      mapperMeta: payload.mapper_meta ?? null,
+    };
   }
 }
