@@ -7,6 +7,7 @@ import type { Button, EmulatorStatus } from '../types/emulator';
 import { CanvasView } from './canvasView';
 import { Controls } from './controls';
 import { DebugPane } from './debugPane';
+import { MobileControls } from './mobileControls';
 import './styles.css';
 
 const KEY_TO_BUTTON: Record<string, Button> = {
@@ -58,6 +59,8 @@ export class App {
 
   private readonly debugPane: DebugPane;
 
+  private readonly mobileControls: MobileControls;
+
   private readonly gamepadManager: GamepadManager;
 
   private readonly loop: EmulatorLoop;
@@ -105,6 +108,18 @@ export class App {
     this.controls.setRunning(false);
     this.controls.setMuted(this.muted);
     this.controls.setVolume(this.volume);
+
+    this.mobileControls = new MobileControls(screenCard, {
+      onSelectRom: async (file) => this.handleRomSelect(file),
+      onToggleRun: () => this.toggleRun(),
+      onReset: () => this.reset(),
+      onButtonState: (button, pressed) => this.gameBoy.setButtonState(button, pressed),
+      onUserGesture: () => {
+        void this.audioOutput.resumeFromUserGesture();
+      },
+    });
+    this.mobileControls.setRunning(false);
+    this.mobileControls.setRomName(null);
 
     this.gamepadManager = new GamepadManager((button, pressed) => {
       this.gameBoy.setButtonState(button, pressed);
@@ -165,11 +180,22 @@ export class App {
     });
 
     window.addEventListener('blur', () => {
+      this.mobileControls.releaseAllVirtualButtons();
+      this.gameBoy.releaseAllButtons();
+    });
+
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        return;
+      }
+
+      this.mobileControls.releaseAllVirtualButtons();
       this.gameBoy.releaseAllButtons();
     });
 
     window.addEventListener('pagehide', () => {
       this.flushSave();
+      this.mobileControls.releaseAllVirtualButtons();
       this.gameBoy.releaseAllButtons();
       void this.audioOutput.close();
     });
@@ -235,6 +261,7 @@ export class App {
 
   private async handleRomSelect(file: File): Promise<void> {
     this.controls.setError('');
+    this.mobileControls.setError('');
 
     try {
       const romBuffer = await file.arrayBuffer();
@@ -257,32 +284,41 @@ export class App {
       const cartridgeInfo = this.gameBoy.getCartridgeInfo();
       this.status.romName = cartridgeInfo?.title || file.name;
       this.controls.setRomName(this.status.romName);
+      this.mobileControls.setRomName(this.status.romName);
       this.controls.setSaveState(this.status.saveState);
 
       this.loop.reset();
       this.status.running = false;
       this.controls.setRunning(false);
+      this.mobileControls.setRunning(false);
       this.audioOutput.setPaused(true);
       void this.audioOutput.resumeFromUserGesture();
       this.canvasView.draw(this.gameBoy.getFrameBuffer());
       this.updateDebugPane();
     } catch (error) {
-      this.controls.setError(error instanceof Error ? error.message : 'Unable to load ROM.');
+      const errorMessage = error instanceof Error ? error.message : 'Unable to load ROM.';
+      this.controls.setError(errorMessage);
+      this.mobileControls.setError(errorMessage);
       this.status.romName = null;
       this.controls.setRomName(null);
+      this.mobileControls.setRomName(null);
     }
   }
 
   private toggleRun(): void {
     if (!this.status.romName) {
-      this.controls.setError('Load a ROM before starting emulation.');
+      const message = 'Load a ROM before starting emulation.';
+      this.controls.setError(message);
+      this.mobileControls.setError(message);
       return;
     }
 
     this.controls.setError('');
+    this.mobileControls.setError('');
     this.loop.toggle();
     this.status.running = this.loop.isRunning();
     this.controls.setRunning(this.status.running);
+    this.mobileControls.setRunning(this.status.running);
 
     if (this.status.running) {
       this.audioOutput.setPaused(false);
@@ -314,6 +350,7 @@ export class App {
 
     this.status.running = false;
     this.controls.setRunning(false);
+    this.mobileControls.setRunning(false);
     this.audioOutput.setPaused(true);
     this.canvasView.draw(this.gameBoy.getFrameBuffer());
     this.updateDebugPane();
@@ -326,6 +363,7 @@ export class App {
 
     this.loop.pause();
     this.controls.setRunning(false);
+    this.mobileControls.setRunning(false);
     this.audioOutput.setPaused(true);
     this.loop.stepInstruction();
     this.updateDebugPane();
@@ -338,6 +376,7 @@ export class App {
 
     this.loop.pause();
     this.controls.setRunning(false);
+    this.mobileControls.setRunning(false);
     this.audioOutput.setPaused(true);
     this.loop.stepFrame();
     this.updateDebugPane();

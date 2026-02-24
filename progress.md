@@ -285,3 +285,24 @@ Original prompt: Implement a browser gameboy emulator that can load and play rom
   - ran develop-web-game Playwright client against `http://127.0.0.1:5173`,
   - inspected generated `output/web-game/shot-1.png` and `state-1.json`,
   - verified deterministic hooks include new audio payload block and no runtime console/page errors surfaced.
+- Mobile-friendly play view milestone completed:
+  - added `src/ui/mobileControls.ts` with dedicated mobile card UI (ROM file input, Run/Pause, Reset, virtual D-pad, A/B, Start/Select),
+  - implemented pointer-based hold/release controls with `pointerId -> button` tracking for multi-touch combos,
+  - added stuck-input hardening for mobile controls on `blur`, `visibilitychange`, and `pagehide`.
+- App/runtime integration updates:
+  - wired mobile controls into existing ROM load/run/reset/button flows in `src/ui/App.ts`,
+  - kept desktop keyboard/gamepad behavior unchanged,
+  - synchronized run/ROM/error state between desktop controls and mobile controls,
+  - ensured mobile user-gesture paths trigger audio resume for autoplay-restricted browsers.
+- Responsive UI updates in `src/ui/styles.css`:
+  - added `.mobile-controls-card` and virtual pad/button styles,
+  - enabled automatic mobile mode with `@media (max-width: 920px), (hover: none) and (pointer: coarse)`,
+  - mobile mode hides sidebar debug/desktop panels and keeps screen + controls in a play-first layout.
+- Added deterministic mobile E2E coverage:
+  - new `tests/e2e/mobile.controls.spec.ts` verifies mobile-mode visibility, ROM loading, run state, and virtual pointer press/release transitions reflected in `render_game_to_text()` joypad payload.
+- Validation status:
+  - `npm run -s build` ✅
+  - `npm run -s test:unit` ✅
+  - `npm run -s test:e2e` ✅
+  - `npm run -s test:compat` ✅
+  - `npm run -s format:check` ✅

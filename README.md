@@ -12,6 +12,10 @@ From-scratch browser Game Boy emulator targeting original DMG behavior.
 - Canvas renderer (160x144 internal resolution, pixel scaling)
 - DMG APU v1 audio (CH1/CH2/CH3/CH4, stereo routing via NR50/NR51/NR52)
 - Basic debug pane (registers, flags, interrupt state, serial tail)
+- Auto responsive mobile play mode:
+  - hides desktop debug/sidebar panels
+  - shows virtual controls (D-pad, A/B, Start/Select)
+  - keeps ROM load + Run/Pause + Reset accessible
 - Deterministic browser hooks:
   - `window.render_game_to_text()`
   - `window.advanceTime(ms)`
@@ -26,6 +30,14 @@ From-scratch browser Game Boy emulator targeting original DMG behavior.
 - Fullscreen toggle: `F`
 - Audio mute toggle: UI button
 - Audio volume: UI slider (0..1)
+
+Mobile controls (auto shown on small/coarse-pointer devices):
+
+- D-pad: virtual `up/down/left/right` buttons
+- A/B: virtual action buttons
+- Start/Select: virtual menu buttons
+- ROM load: mobile file picker in mobile controls card
+- Run/Pause + Reset: mobile action buttons
 
 ## Development
 
