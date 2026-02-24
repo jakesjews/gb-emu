@@ -15,6 +15,10 @@ import {
 
 const STRICT_COMPAT = process.env.GB_COMPAT_STRICT !== '0';
 const MAPPER_MODE = process.env.GB_MAPPER_COMPAT_MODE ?? 'shadow';
+const RUN_REQUIRED_SUITES = MAPPER_MODE === 'strict';
+const RUN_OPTIONAL_SUITES = MAPPER_MODE === 'shadow';
+const describeRequired = RUN_REQUIRED_SUITES ? describe : describe.skip;
+const describeOptional = RUN_OPTIONAL_SUITES ? describe : describe.skip;
 const MOONEYE_ROM_DIR =
   process.env.GB_MOONEYE_ROM_DIR ?? path.resolve(process.cwd(), 'tests/roms/mooneye');
 const MAPPER_ROM_DIR =
@@ -44,13 +48,10 @@ const MBC3_REQUIRED_CASES: ReadonlyArray<MapperCompatCase> = [
   { romName: 'MBC3_Test.gbc', maxCycles: 160_000_000 },
 ];
 
-const MBC3_OPTIONAL_CASES: ReadonlyArray<MapperCompatCase> =
-  MAPPER_MODE === 'strict'
-    ? []
-    : [
-        { romName: 'rtc3test.gb', maxCycles: 12_000_000 },
-        { romName: 'mbctest.gb', maxCycles: 12_000_000 },
-      ];
+const MBC3_OPTIONAL_CASES: ReadonlyArray<MapperCompatCase> = [
+  { romName: 'rtc3test.gb', maxCycles: 12_000_000 },
+  { romName: 'mbctest.gb', maxCycles: 12_000_000 },
+];
 
 function tupleFromSnapshot(
   snapshot: ReturnType<GameBoy['getDebugSnapshot']>,
@@ -208,7 +209,7 @@ async function runInformationalMbc3Case(romPath: string, maxCycles: number): Pro
   );
 }
 
-describe('mapper compatibility shadow: MBC5 mooneye oracle', () => {
+describeRequired('mapper compatibility required: MBC5 mooneye oracle', () => {
   const startedAt = new Date().toISOString();
   const reportCases: CompatCaseReport[] = [];
   const missingRoms = findMissingRoms(
@@ -247,10 +248,10 @@ describe('mapper compatibility shadow: MBC5 mooneye oracle', () => {
 
   afterAll(() => {
     writeCompatSuiteReport(
-      'mapper-mbc5-shadow.json',
+      'mapper-mbc5.json',
       buildCompatSuiteReport({
         suite: 'mapper',
-        tier: 'mbc5-shadow',
+        tier: 'mbc5',
         strict: STRICT_COMPAT,
         startedAt,
         finishedAt: new Date().toISOString(),
@@ -260,7 +261,7 @@ describe('mapper compatibility shadow: MBC5 mooneye oracle', () => {
   });
 });
 
-describe('mapper compatibility shadow: MBC3 basic RTC smoke', () => {
+describeRequired('mapper compatibility required: MBC3 bank smoke', () => {
   const startedAt = new Date().toISOString();
   const reportCases: CompatCaseReport[] = [];
   const requiredMissing = findMissingRoms(
@@ -268,24 +269,11 @@ describe('mapper compatibility shadow: MBC3 basic RTC smoke', () => {
     MBC3_REQUIRED_CASES.map((entry) => entry.romName),
     existsSync,
   );
-  const optionalMissing = findMissingRoms(
-    MAPPER_ROM_DIR,
-    MBC3_OPTIONAL_CASES.map((entry) => entry.romName),
-    existsSync,
-  );
-  const missingSet = new Set([...requiredMissing, ...optionalMissing].map((entry) => entry.name));
+  const missingSet = new Set(requiredMissing.map((entry) => entry.name));
 
   for (const missing of requiredMissing) {
     reportCases.push(
       createSkippedCaseReport(missing.name, `Missing required ROM asset: ${missing.absolutePath}`),
-    );
-  }
-  for (const missing of optionalMissing) {
-    reportCases.push(
-      createSkippedCaseReport(
-        missing.name,
-        `Missing optional ROM asset for shadow diagnostics: ${missing.absolutePath}`,
-      ),
     );
   }
 
@@ -307,6 +295,40 @@ describe('mapper compatibility shadow: MBC3 basic RTC smoke', () => {
         expect(result.status, detail).toBe('pass');
       },
       180_000,
+    );
+  }
+
+  afterAll(() => {
+    writeCompatSuiteReport(
+      'mapper-mbc3.json',
+      buildCompatSuiteReport({
+        suite: 'mapper',
+        tier: 'mbc3',
+        strict: STRICT_COMPAT,
+        startedAt,
+        finishedAt: new Date().toISOString(),
+        cases: reportCases,
+      }),
+    );
+  });
+});
+
+describeOptional('mapper compatibility optional: MBC3 RTC diagnostics', () => {
+  const startedAt = new Date().toISOString();
+  const reportCases: CompatCaseReport[] = [];
+  const optionalMissing = findMissingRoms(
+    MAPPER_ROM_DIR,
+    MBC3_OPTIONAL_CASES.map((entry) => entry.romName),
+    existsSync,
+  );
+  const missingSet = new Set(optionalMissing.map((entry) => entry.name));
+
+  for (const missing of optionalMissing) {
+    reportCases.push(
+      createSkippedCaseReport(
+        missing.name,
+        `Missing optional ROM asset for shadow diagnostics: ${missing.absolutePath}`,
+      ),
     );
   }
 
@@ -334,11 +356,11 @@ describe('mapper compatibility shadow: MBC3 basic RTC smoke', () => {
 
   afterAll(() => {
     writeCompatSuiteReport(
-      'mapper-mbc3-shadow.json',
+      'mapper-mbc3-rtc-shadow.json',
       buildCompatSuiteReport({
         suite: 'mapper',
-        tier: 'mbc3-shadow',
-        strict: STRICT_COMPAT,
+        tier: 'mbc3-rtc-shadow',
+        strict: false,
         startedAt,
         finishedAt: new Date().toISOString(),
         cases: reportCases,

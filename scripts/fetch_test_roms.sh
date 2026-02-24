@@ -41,9 +41,12 @@ tar -xJf "$TMP_ARCHIVE" --strip-components=1 -C "$MOONEYE_DIR"
 
 echo "Mooneye bundle extracted to $MOONEYE_DIR"
 
-echo "Fetching mapper compatibility ROMs"
+echo "Fetching mapper compatibility ROMs (required)"
 curl -fsSL "$MBC3_TEST_URL" -o "$MAPPER_DIR/MBC3_Test.gbc"
 curl -fsSL "$RTC3_TEST_URL" -o "$MAPPER_DIR/rtc3test.gb"
+echo "Fetched required mapper ROMs: MBC3_Test.gbc, rtc3test.gb"
+
+echo "Fetching mapper compatibility ROMs (optional)"
 if curl -fsSL "$MBC3_OPTIONAL_TEST_URL" -o "$MAPPER_DIR/mbctest.gb"; then
   echo "Fetched optional mapper ROM: mbctest.gb"
 else

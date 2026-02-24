@@ -46,13 +46,9 @@ jobs:
       - name: Compatibility tests (strict gate)
         run: npm run test:compat
 
-      - name: Compatibility tests (tier3b shadow)
+      - name: Compatibility tests (mapper RTC shadow diagnostics)
         continue-on-error: true
-        run: GB_COMPAT_STRICT=0 npm run test:compat:tier3b
-
-      - name: Compatibility tests (mapper shadow)
-        continue-on-error: true
-        run: GB_COMPAT_STRICT=0 npm run test:compat:mapper:shadow
+        run: npm run test:compat:mapper:shadow
 
       - name: Compatibility summary
         if: always()

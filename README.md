@@ -40,11 +40,11 @@ npm run test:compat:tier1
 npm run test:compat:tier2
 npm run test:compat:tier3a
 npm run test:compat:tier3b
-npm run test:compat:mapper:shadow
 npm run test:compat:mapper:strict
-npm run test:compat        # strict gate (tier1 + tier2 + tier3a)
+npm run test:compat:mapper:shadow
+npm run test:compat        # strict gate (blargg + tier1 + tier2 + tier3a + tier3b + mapper-required)
 npm run test:compat:soft   # local convenience mode (allows missing ROM assets)
-npm run test:compat:extended # strict required set + shadow tier3b
+npm run test:compat:extended # strict required set + optional mapper RTC diagnostics
 npm run test:compat:report # writes test-results/compat/summary.md
 npm run test:e2e
 ```
@@ -55,9 +55,8 @@ CI (GitHub Actions) runs:
 - `npm run build`
 - `npm run format:check`
 - `npm run test:unit`
-- `npm run test:compat` (strict tier1 + tier2 + tier3a gate with zero allowed skips)
-- `GB_COMPAT_STRICT=0 npm run test:compat:tier3b` (informational shadow coverage)
-- `GB_COMPAT_STRICT=0 npm run test:compat:mapper:shadow` (informational mapper shadow coverage)
+- `npm run test:compat` (strict required gate: blargg + mooneye tier1/tier2/tier3a/tier3b + mapper required suites)
+- `npm run test:compat:mapper:shadow` (optional informational RTC diagnostics, non-blocking)
 - `npm run test:compat:report` (generates CI-friendly summary)
 - `npm run test:e2e` (deterministic smoke + optional local Tetris smoke that skips without `tests/roms/tetris.gb`)
 
@@ -80,13 +79,14 @@ Compatibility artifacts are emitted to `test-results/compat/`:
 - `mooneye-tier1.json`
 - `mooneye-tier2.json`
 - `mooneye-tier3a.json`
-- `mooneye-tier3b.json` (when shadow tier is run)
-- `mapper-mbc5-shadow.json` (when mapper shadow runs)
-- `mapper-mbc3-shadow.json` (when mapper shadow runs)
+- `mooneye-tier3b.json`
+- `mapper-mbc5.json`
+- `mapper-mbc3.json`
+- `mapper-mbc3-rtc-shadow.json` (optional informational diagnostics)
 - `summary.md`
 
-Tier-3B and mapper suites are shadow/informational until promotion.
-Promotion policy: shadow suites move into strict required gating after 3 consecutive green shadow runs on `main`.
+Tier-3B and mapper-required suites are promoted into strict gating (experimental policy, promoted on green).
+`mapper-mbc3-rtc-shadow` remains informational and non-blocking.
 
 ## Notes
 

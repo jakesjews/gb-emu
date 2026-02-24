@@ -229,3 +229,30 @@ Original prompt: Implement a browser gameboy emulator that can load and play rom
   - ran `web_game_playwright_client.js` against `http://127.0.0.1:5173` with action payloads,
   - inspected `output/web-game/shot-1.png` and `output/web-game/state-1.json`,
   - no new console/page errors observed from the client run.
+
+## 2026-02-25
+
+- Immediate promotion milestone completed (experimental policy: promoted on green, no streak wait).
+- Strict compatibility gate is now:
+  - `blargg` + `mooneye tier1` + `mooneye tier2` + `mooneye tier3a` + `mooneye tier3b` + required mapper suites.
+- Script wiring updates:
+  - `test:compat` now executes required tier3b and mapper strict suites.
+  - `test:compat:soft` mirrors the same required set with soft asset semantics.
+  - `test:compat:extended` now runs strict required gate plus optional mapper RTC diagnostics.
+- Mapper compat split into required vs informational:
+  - required reports:
+    - `mapper-mbc5.json`
+    - `mapper-mbc3.json`
+  - optional informational diagnostics:
+    - `mapper-mbc3-rtc-shadow.json` (`rtc3test.gb` + optional `mbctest.gb`)
+- CI gate alignment:
+  - strict required check remains `npm run test:compat` and now includes tier3b + mapper required suites.
+  - optional non-blocking step runs `npm run test:compat:mapper:shadow` for RTC diagnostics.
+- Report gate update:
+  - strict report now requires `mooneye-tier3b`, `mapper-mbc5`, and `mapper-mbc3` artifacts.
+  - optional mapper RTC shadow report is included in summary when present but non-blocking.
+- ROM fetch script messaging hardened:
+  - required mapper ROM fetch paths are clearly labeled and remain hard-fail.
+  - optional `mbctest.gb` remains best-effort and non-fatal.
+- Promotion policy language updated in docs:
+  - replaced streak-based wording with immediate promoted-on-green experimental policy.
